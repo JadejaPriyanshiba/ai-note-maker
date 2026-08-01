@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "users": {
+      "fields": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string", "optional": true },
+        "bio": { "type": "string", "optional": true },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "notes": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "learnerLevel": { "type": "string" },
+        "complexity": { "type": "string" },
+        "depth": { "type": "string" },
+        "language": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" }
+      }
+    },
+    "collections": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "decks": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "flashcards": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "deckId": { "type": "string" },
+        "front": { "type": "string" },
+        "back": { "type": "string" }
+      }
+    },
+    "tests": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "noteTitle": { "type": "string" },
+        "subject": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "attempts": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "subject": { "type": "string" },
+        "score": { "type": "number" },
+        "total": { "type": "number" },
+        "completedAt": { "type": "string" }
+      }
+    },
+    "community_notes": {
+      "fields": {
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    }
+  }
+}

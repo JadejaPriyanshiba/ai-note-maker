@@ -1,0 +1,6 @@
+{
+  "name": "AI Note Maker",
+  "description": "AI-powered student study workspace with roadmap editing, structured note studio, test assessments, audio learning, and community remixing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
