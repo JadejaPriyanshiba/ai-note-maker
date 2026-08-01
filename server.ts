@@ -963,4 +963,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// On Vercel, api/index.ts imports `app` as a serverless request handler —
+// it must not bind a port or attach the Vite/static middleware above.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
