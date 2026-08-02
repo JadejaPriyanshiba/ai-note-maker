@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Note Maker — turn 2am panic into a study system</title>
+<meta name="description" content="AI Note Maker turns whatever's in your head into notes, flashcards, tests, and even a podcast — local-first, AI-powered, actually organized." />
+<meta property="og:title" content="AI Note Maker" />
+<meta property="og:description" content="Turn 2am panic into an actual study system. Notes, flashcards, tests, and audio — all generated from one roadmap." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="https://jadejapriyanshiba.github.io/ai-note-maker/assets/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2318181b'/%3E%3Cpath d='M7 8h10M7 12h7M7 16h4' stroke='%23fafafa' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-elev: #ffffff;
+    --bg-sunken: #f4f4f5;
+    --text: #18181b;
+    --text-dim: #52525b;
+    --text-faint: #a1a1aa;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --accent: #18181b;
+    --accent-text: #fafafa;
+    --amber: #b45309;
+    --emerald: #047857;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px -8px rgba(0,0,0,.08);
+    --radius: 1rem;
+    --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #0a0a0b;
+    --bg-elev: #131316;
+    --bg-sunken: #18181b;
+    --text: #fafafa;
+    --text-dim: #a1a1aa;
+    --text-faint: #71717a;
+    --border: #26262b;
+    --border-strong: #333338;
+    --accent: #fafafa;
+    --accent-text: #18181b;
+    --amber: #fbbf24;
+    --emerald: #34d399;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -8px rgba(0,0,0,.5);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) {
+      --bg: #0a0a0b;
+      --bg-elev: #131316;
+      --bg-sunken: #18181b;
+      --text: #fafafa;
+      --text-dim: #a1a1aa;
+      --text-faint: #71717a;
+      --border: #26262b;
+      --border-strong: #333338;
+      --accent: #fafafa;
+      --accent-text: #18181b;
+      --amber: #fbbf24;
+      --emerald: #34d399;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -8px rgba(0,0,0,.5);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    transition: background .2s ease, color .2s ease;
+    position: relative;
+  }
+
+  /* Subtle tileable film-grain overlay — purely additive; if assets/grain.png is never
+     uploaded this simply paints nothing (missing CSS background-images fail silently). */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 60; pointer-events: none;
+    background-image: url('assets/grain.png'); background-size: 220px 220px;
+    opacity: .035; mix-blend-mode: overlay;
+  }
+
+  .skip-link {
+    position: absolute; left: -9999px; top: 0; z-index: 100;
+    background: var(--accent); color: var(--accent-text);
+    padding: .75rem 1.25rem; border-radius: 0 0 .5rem 0; font-weight: 600;
+  }
+  .skip-link:focus { left: 0; }
+
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--emerald); outline-offset: 2px; border-radius: 4px; }
+
+  .wrap { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; }
+
+  /* ---------- Nav ---------- */
+  header.site-nav {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 4rem; }
+  .brand { display: flex; align-items: center; gap: .65rem; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+  .brand-mark { width: 2rem; height: 2rem; border-radius: .6rem; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .nav-links { display: flex; align-items: center; gap: 1.75rem; }
+  .nav-links a { font-size: .875rem; font-weight: 500; color: var(--text-dim); text-decoration: none; transition: color .15s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-actions { display: flex; align-items: center; gap: .6rem; }
+  .icon-btn {
+    width: 2.25rem; height: 2.25rem; border-radius: .6rem; border: 1px solid var(--border);
+    background: var(--bg-elev); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-dim); transition: border-color .15s, color .15s;
+  }
+  .icon-btn:hover { border-color: var(--border-strong); color: var(--text); }
+  @media (max-width: 720px) { .nav-links { display: none; } }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .7rem 1.15rem; border-radius: .7rem; font-weight: 600; font-size: .9rem;
+    text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: transform .15s, opacity .15s, border-color .15s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); color: var(--accent-text); }
+  .btn-primary:hover { opacity: .9; }
+  .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { border-color: var(--text-dim); }
+  .btn-text {
+    background: none; border: none; padding: .7rem .2rem; font: inherit; font-weight: 600; font-size: .85rem;
+    color: var(--text-dim); cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+    text-decoration-color: var(--border-strong); transition: color .15s;
+  }
+  .btn-text:hover { color: var(--text); }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: .5rem;
+    font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--text-dim); background: var(--bg-sunken); border: 1px solid var(--border);
+    padding: .4rem .8rem; border-radius: 999px; margin-bottom: 1.5rem;
+  }
+  .eyebrow .dot { width: .4rem; height: .4rem; border-radius: 999px; background: var(--emerald); }
+
+  .display-h1 {
+    font-size: clamp(2.1rem, 4.6vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em;
+    line-height: 1.08; margin: 0 0 1.25rem; max-width: 20ch;
+  }
+  .accent-text { color: var(--text-dim); }
+  p.lead { font-size: 1.1rem; color: var(--text-dim); max-width: 42ch; margin: 0 0 2rem; }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem .9rem; margin: 0; }
+
+  /* ================= CINEMATIC SCROLL STORY ================= */
+  /* Base rules = safe fallback: a plain, fully-readable stacked list. This is what everyone
+     gets by default — touch devices, narrow viewports, reduced-motion, no-JS, crawlers. */
+  .cinematic { position: relative; padding-bottom: 1rem; }
+  .cinematic-stage { position: static; }
+  .story-canvas, .story-mask, .story-progress, .story-track, .hint-pill { display: none; }
+  .story-overlay { position: static; }
+  .story-beat {
+    padding-top: 3rem; padding-bottom: 3rem; border-bottom: 1px solid var(--border);
+    opacity: 1; pointer-events: auto;
+  }
+  .story-beat:last-of-type { border-bottom: none; }
+  .story-beat[data-beat="0"] { padding-top: 2.5rem; border-bottom: none; }
+  .story-tag {
+    display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--emerald); margin-bottom: .9rem;
+  }
+  .story-beat h2 {
+    font-size: clamp(1.7rem, 3.2vw, 2.4rem); font-weight: 800; letter-spacing: -0.02em;
+    line-height: 1.14; margin: 0 0 .75rem; max-width: 22ch;
+  }
+  .story-beat p { font-size: 1.02rem; color: var(--text-dim); max-width: 40ch; margin: 0; }
+
+  /* Enhanced: the pinned, particle-driven cinematic version — only where it can shine and be
+     controlled precisely (wide viewport, real pointer, motion allowed). Everything below is
+     additive on top of the same markup used for the fallback above. */
+  @media (min-width: 860px) and (prefers-reduced-motion: no-preference) {
+    .cinematic-stage {
+      position: sticky; top: 0; height: 100vh; height: 100dvh;
+      display: flex; align-items: center; overflow: hidden;
+    }
+    .story-canvas {
+      display: block; position: absolute; inset: 0; width: 100%; height: 100%;
+      z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.4s ease;
+    }
+    .story-canvas.is-ready { opacity: 1; }
+    .story-mask {
+      display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        linear-gradient(90deg, var(--bg) 0%, var(--bg) 10%, transparent 50%),
+        linear-gradient(180deg, transparent 80%, var(--bg) 100%);
+    }
+    .story-overlay { position: relative; z-index: 2; width: 100%; height: 100%; }
+    .story-beat {
+      position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
+      padding: 0; border: none; opacity: 0; pointer-events: none; transform: translateY(14px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+    .story-beat.is-active { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .story-track { display: block; }
+    .story-sentinel { height: 100vh; height: 100dvh; }
+    .story-progress {
+      display: flex; flex-direction: column; gap: .6rem; position: absolute;
+      right: 2rem; top: 50%; transform: translateY(-50%); z-index: 3;
+    }
+    .story-dot {
+      width: .55rem; height: .55rem; border-radius: 999px; background: var(--border-strong);
+      border: none; cursor: pointer; padding: 0; transition: background .2s, transform .2s;
+    }
+    .story-dot:hover { background: var(--text-faint); }
+    .story-dot.is-active { background: var(--emerald); transform: scale(1.5); }
+    .hint-pill {
+      display: block; position: absolute; z-index: 3; top: 1.75rem; right: 5.5rem;
+      font-size: .78rem; color: var(--text-faint); background: var(--bg-elev);
+      border: 1px solid var(--border); padding: .4rem .8rem; border-radius: 999px;
+      opacity: 0; pointer-events: none; transition: opacity .5s ease;
+    }
+    .hint-pill.is-visible { opacity: 1; }
+  }
+
+  /* ---------- Sections ---------- */
+  section { padding: 4.5rem 0; }
+  .section-head { max-width: 42rem; margin: 0 0 2.75rem; }
+  .section-head .eyebrow { margin-bottom: 1rem; }
+  .section-head h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; margin: 0 0 .75rem; }
+  .section-head p { color: var(--text-dim); font-size: 1.02rem; margin: 0; }
+
+  /* ---------- Feature bento ---------- */
+  .bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  @media (max-width: 900px) { .bento { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .bento { grid-template-columns: 1fr; } }
+  .feature-card {
+    grid-column: span 1; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; opacity: 0; transform: translateY(10px); transition: opacity .5s ease, transform .5s ease, border-color .15s;
+  }
+  .feature-card:hover { border-color: var(--border-strong); }
+  .feature-card.in-view { opacity: 1; transform: translateY(0); }
+  .feature-card.span-2 { grid-column: span 2; }
+  @media (max-width: 900px) { .feature-card.span-2 { grid-column: span 2; } }
+  @media (max-width: 560px) { .feature-card.span-2 { grid-column: span 1; } }
+  .feature-icon {
+    width: 2.5rem; height: 2.5rem; border-radius: .7rem; background: var(--bg-sunken);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--text);
+  }
+  .feature-card h3 { font-size: 1.02rem; font-weight: 700; margin: 0 0 .5rem; letter-spacing: -0.01em; }
+  .feature-card p { font-size: .9rem; color: var(--text-dim); margin: 0; }
+
+  /* ---------- Privacy band ---------- */
+  .band {
+    background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 2.25rem; display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: start;
+  }
+  @media (max-width: 640px) { .band { grid-template-columns: 1fr; } }
+  .band-icon {
+    width: 3rem; height: 3rem; border-radius: .8rem; background: var(--bg-elev); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; color: var(--emerald);
+  }
+  .band h3 { margin: 0 0 .5rem; font-size: 1.15rem; font-weight: 700; }
+  .band p { margin: 0; color: var(--text-dim); max-width: 60ch; }
+
+  /* ---------- Tech strip ---------- */
+  .pills { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 2.5rem; }
+  .pill {
+    font-size: .82rem; font-weight: 600; padding: .5rem .9rem; border-radius: 999px;
+    background: var(--bg-elev); border: 1px solid var(--border); color: var(--text-dim);
+  }
+  .doc-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  @media (max-width: 720px) { .doc-links { grid-template-columns: 1fr; } }
+  .doc-link {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 1.1rem 1.25rem; border-radius: .8rem; border: 1px solid var(--border); background: var(--bg-elev);
+    text-decoration: none; color: var(--text); transition: border-color .15s, transform .15s;
+  }
+  .doc-link:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .doc-link .name { font-weight: 700; font-size: .92rem; }
+  .doc-link .desc { font-size: .78rem; color: var(--text-faint); margin-top: .15rem; }
+  .doc-link svg { flex-shrink: 0; color: var(--text-faint); }
+
+  /* ---------- Footer CTA ---------- */
+  .cta-band {
+    text-align: center; padding: 4rem 2rem; border-radius: var(--radius);
+    background: var(--accent); color: var(--accent-text);
+  }
+  .cta-band h2 { font-size: clamp(1.5rem, 3vw, 2rem); margin: 0 0 .75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .cta-band p { margin: 0 0 1.75rem; opacity: .75; }
+  .cta-band .hero-actions { justify-content: center; }
+  .cta-band .btn-primary { background: var(--accent-text); color: var(--accent); }
+  .cta-band .btn-ghost { border-color: color-mix(in srgb, var(--accent-text) 30%, transparent); color: var(--accent-text); }
+
+  footer.site-footer { padding: 3rem 0; border-top: 1px solid var(--border); margin-top: 2rem; }
+  .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; align-items: center; }
+  .footer-inner p { margin: 0; font-size: .82rem; color: var(--text-faint); }
+  .footer-links { display: flex; gap: 1.5rem; }
+  .footer-links a { font-size: .82rem; color: var(--text-dim); text-decoration: none; }
+  .footer-links a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+
+<header class="site-nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M7 8h10M7 12h7M7 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </span>
+      AI Note Maker
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#stack">Built with</a>
+      <a href="#docs">Docs</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg id="theme-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v1.5M12 19.5V21M4.6 4.6l1 1M18.4 18.4l1 1M3 12h1.5M19.5 12H21M4.6 19.4l1-1M18.4 5.6l1-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+      <a class="btn btn-ghost" href="https://github.com/JadejaPriyanshiba/ai-note-maker" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.95 0-1.09.39-1.99 1.03-2.69-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.03a9.6 9.6 0 0 1 5 0c1.91-1.3 2.75-1.03 2.75-1.03.55 1.37.2 2.39.1 2.64.64.7 1.03 1.6 1.03 2.69 0 3.85-2.34 4.7-4.57 4.95.36.31.68.92.68 1.85v2.74c0 .26.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <div id="top"></div>
+
+  <!-- ============ CINEMATIC SCROLL STORY ============
+       One continuous particle field carries this whole section: it starts as literal chaos
+       (beat 0, the hero) and reassembles into a different shape for each feature as you scroll.
+       On narrow viewports / reduced-motion, the exact same markup renders as a plain readable
+       stack instead — see the CSS above for the two modes. -->
+  <div class="cinematic" id="cinematic">
+    <div class="cinematic-stage">
+      <canvas class="story-canvas" id="story-canvas" aria-hidden="true"></canvas>
+      <div class="story-mask" aria-hidden="true"></div>
+
+      <div class="story-overlay">
+        <div class="story-beat wrap is-active" data-beat="0">
+          <span class="eyebrow"><span class="dot" aria-hidden="true"></span>local-first · zero-stress studying</span>
+          <h1 class="display-h1">Turn 2am panic into an actual study system.</h1>
+          <p class="lead">Dump whatever's rattling around your brain — AI Note Maker turns it into notes, flashcards, tests, even a podcast. No cap, it's kind of scary how organized this gets.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://github.com/JadejaPriyanshiba/ai-note-maker" target="_blank" rel="noopener">
+              Peek the code
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <!-- TODO: point this at the deployed app URL once available -->
+            <a class="btn btn-ghost" href="#" aria-disabled="true" title="Live app link — add deployment URL">Try it free</a>
+            <button type="button" class="btn-text" id="replay-chaos">🔄 mess it up again</button>
+          </div>
+        </div>
+
+        <div class="story-beat wrap" data-beat="1">
+          <span class="story-tag">Step 1</span>
+          <h2>Tell it what you're studying.</h2>
+          <p>Subject, vibe, how deep you wanna go. It builds the whole roadmap in seconds — you approve it before anything else gets made.</p>
+        </div>
+
+        <div class="story-beat wrap" data-beat="2">
+          <span class="story-tag">Step 2</span>
+          <h2>It writes the actual notes.</h2>
+          <p>Headings, examples, exam call-outs — organized by topic, not just a wall of AI-generated text.</p>
+        </div>
+
+        <div class="story-beat wrap" data-beat="3">
+          <span class="story-tag">Step 3</span>
+          <h2>Flashcards, without the flashcard-making.</h2>
+          <p>Auto-generated from your notes, with spaced repetition — the ones you keep forgetting keep coming back.</p>
+        </div>
+
+        <div class="story-beat wrap" data-beat="4">
+          <span class="story-tag">Step 4</span>
+          <h2>Tests that clock your weak spots.</h2>
+          <p>Not just a score — a running list of exactly what to review next, and a retest built from it.</p>
+        </div>
+
+        <div class="story-beat wrap" data-beat="5">
+          <span class="story-tag">Step 5</span>
+          <h2>Or just listen to it.</h2>
+          <p>Turns your notes into a two-host podcast, for the days reading feels like too much.</p>
+        </div>
+
+        <div class="story-beat wrap" data-beat="6">
+          <span class="story-tag">Step 6</span>
+          <h2>Doomscroll, but it's studying now.</h2>
+          <p>Short videos, one topic at a time, queued up by an AI that's not trying to sell you skincare.</p>
+        </div>
+      </div>
+
+      <span class="hint-pill" id="hint-pill">👆 try moving your mouse</span>
+
+      <div class="story-progress" role="tablist" aria-label="Story progress">
+        <button type="button" class="story-dot is-active" data-goto="0" aria-label="Intro"></button>
+        <button type="button" class="story-dot" data-goto="1" aria-label="Step 1: roadmap"></button>
+        <button type="button" class="story-dot" data-goto="2" aria-label="Step 2: notes"></button>
+        <button type="button" class="story-dot" data-goto="3" aria-label="Step 3: flashcards"></button>
+        <button type="button" class="story-dot" data-goto="4" aria-label="Step 4: tests"></button>
+        <button type="button" class="story-dot" data-goto="5" aria-label="Step 5: audio"></button>
+        <button type="button" class="story-dot" data-goto="6" aria-label="Step 6: shorts learning"></button>
+      </div>
+    </div>
+
+    <div class="story-track" aria-hidden="true">
+      <div class="story-sentinel" data-sentinel="0"></div>
+      <div class="story-sentinel" data-sentinel="1"></div>
+      <div class="story-sentinel" data-sentinel="2"></div>
+      <div class="story-sentinel" data-sentinel="3"></div>
+      <div class="story-sentinel" data-sentinel="4"></div>
+      <div class="story-sentinel" data-sentinel="5"></div>
+      <div class="story-sentinel" data-sentinel="6"></div>
+    </div>
+  </div>
+
+  <!-- ============ FEATURES ============ -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">the receipts</span>
+        <h2>Same thing, with all the details</h2>
+        <p>In case you scrolled through that too fast — here's the full list, spelled out.</p>
+      </div>
+
+      <div class="bento">
+        <article class="feature-card span-2" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <h3>AI Study Notes</h3>
+          <p>Describe a subject, approve an AI-suggested topic roadmap, then get rich structured notes — headings, callouts, tables, code blocks, and exam-tag highlights — generated topic by topic.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="m8.5 12.5 2 2 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Practice Tests</h3>
+          <p>Auto-generated MCQ, true/false, and fill-in tests, with a weak-topic dashboard that targets retests at what you're actually missing.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3a5 5 0 0 1 5 5c0 2-1 3-2 4s-1.5 1.5-1.5 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="18.5" r="1" fill="currentColor"/><path d="M5 9a7 7 0 0 1 7-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".4"/></svg>
+          </div>
+          <h3>Teach-Back Mode</h3>
+          <p>Explain a topic in your own words. The AI grades your understanding and points out what you missed or got wrong.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="7" width="13" height="9" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 5.5h13a2 2 0 0 1 2 2V14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".5"/></svg>
+          </div>
+          <h3>Flashcards</h3>
+          <p>AI-generated decks with spaced-repetition scheduling, so due cards resurface automatically.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 14V10a8 8 0 0 1 16 0v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="13" width="4" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="17" y="13" width="4" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <h3>Audio Learning</h3>
+          <p>Turns a note into a two-host, podcast-style dialogue script for listening-based review.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="6" y="3" width="12" height="18" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="m10.5 9.5 4 2.5-4 2.5v-5Z" fill="currentColor"/></svg>
+          </div>
+          <h3>Shorts Learning</h3>
+          <p>Breaks a topic into an AI-generated learning tree and feeds you short, curated YouTube videos per node.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Collections</h3>
+          <p>Nest notes, decks, and tests into folders the way you'd organize a semester.</p>
+        </article>
+
+        <article class="feature-card" data-reveal>
+          <div class="feature-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.7-3.8-9s1.3-6.4 3.8-9Z" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <h3>Community</h3>
+          <p>Publish notes, decks, or whole collections publicly, and remix anyone else's.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRIVACY BAND ============ -->
+  <section>
+    <div class="wrap">
+      <div class="band" data-reveal>
+        <div class="band-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6l-7-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m9.5 12 1.8 1.8L15 10.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <h3>We're not selling your notes</h3>
+          <p>Everything you make is saved to your browser first — the app is fully usable without an account. Sign in and it additionally syncs to a private, per-user Firestore database enforced by security rules. Nothing is shared unless you explicitly publish it to the Community.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TECH STACK / DOCS ============ -->
+  <section id="stack">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">for the nerds</span>
+        <h2>Built with a straightforward, inspectable stack</h2>
+        <p>No routing library, no state management framework, one centralized domain model. The full write-up is in the repo.</p>
+      </div>
+
+      <div class="pills" aria-label="Technology stack">
+        <span class="pill">React 19</span>
+        <span class="pill">TypeScript</span>
+        <span class="pill">Vite</span>
+        <span class="pill">Tailwind CSS v4</span>
+        <span class="pill">Express</span>
+        <span class="pill">Firebase (Auth + Firestore)</span>
+        <span class="pill">Google Gemini API</span>
+        <span class="pill">YouTube Data API v3</span>
+      </div>
+
+      <div class="doc-links" id="docs">
+        <a class="doc-link" href="https://github.com/JadejaPriyanshiba/ai-note-maker/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">
+          <span>
+            <span class="name">Architecture</span>
+            <span class="desc">System design, data flow, and why it's built this way</span>
+          </span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="doc-link" href="https://github.com/JadejaPriyanshiba/ai-note-maker/blob/main/docs/DEVELOPMENT.md" target="_blank" rel="noopener">
+          <span>
+            <span class="name">Development Guide</span>
+            <span class="desc">Local setup, Firebase config, conventions</span>
+          </span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="doc-link" href="https://github.com/JadejaPriyanshiba/ai-note-maker/blob/main/docs/API.md" target="_blank" rel="noopener">
+          <span>
+            <span class="name">API Reference</span>
+            <span class="desc">Every backend endpoint, request/response shapes</span>
+          </span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER CTA ============ -->
+  <section>
+    <div class="wrap">
+      <div class="cta-band">
+        <h2>Okay, that's the whole pitch.</h2>
+        <p>Everything on this page is generated from the actual project — no separate marketing build.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/JadejaPriyanshiba/ai-note-maker" target="_blank" rel="noopener">View on GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/JadejaPriyanshiba/ai-note-maker/blob/main/README.md" target="_blank" rel="noopener">Read the README</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>AI Note Maker — study smarter, stress less.</p>
+    <div class="footer-links">
+      <a href="https://github.com/JadejaPriyanshiba/ai-note-maker" target="_blank" rel="noopener">GitHub</a>
+      <a href="#features">Features</a>
+      <a href="#docs">Docs</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var toggle = document.getElementById('theme-toggle');
+    var stored = localStorage.getItem('ainotemaker_landing_theme');
+    if (stored === 'light' || stored === 'dark') root.setAttribute('data-theme', stored);
+
+    function currentTheme() {
+      var attr = root.getAttribute('data-theme');
+      if (attr) return attr;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    toggle.addEventListener('click', function () {
+      var next = currentTheme() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      localStorage.setItem('ainotemaker_landing_theme', next);
+    });
+  })();
+
+  (function () {
+    var items = document.querySelectorAll('[data-reveal]');
+    if (!('IntersectionObserver' in window) || items.length === 0) {
+      items.forEach(function (el) { el.classList.add('in-view'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    items.forEach(function (el) { io.observe(el); });
+  })();
+
+  var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var hasHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  // The pinned particle story only runs where it can be controlled precisely and afford the
+  // cost: a real pointer, a wide viewport, motion allowed. Everyone else gets the plain stacked
+  // version of the exact same markup (see the CSS media query above) — same content, less show.
+  var cinematicEnabled = window.matchMedia('(min-width: 860px)').matches && !prefersReducedMotion;
+
+  // Magnetic hero CTAs. Cheap, CSS-transform-only, skipped on touch (no hover) and reduced-motion.
+  (function () {
+    if (prefersReducedMotion || !hasHover) return;
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    document.querySelectorAll('.hero-actions .btn').forEach(function (btn) {
+      btn.addEventListener('pointermove', function (e) {
+        var r = btn.getBoundingClientRect();
+        var dx = clamp((e.clientX - (r.left + r.width / 2)) * 0.25, -6, 6);
+        var dy = clamp((e.clientY - (r.top + r.height / 2)) * 0.25, -6, 6);
+        btn.style.transform = 'translate(' + dx + 'px,' + (dy - 1) + 'px)';
+      });
+      btn.addEventListener('pointerleave', function () { btn.style.transform = ''; });
+    });
+  })();
+
+  // Beat controller: watches scroll position via IntersectionObserver on the sentinel track and
+  // flips which .story-beat is active. Pure DOM/CSS — works with or without the particle scene
+  // below ever successfully loading, so the story itself never depends on WebGL succeeding.
+  (function () {
+    if (!cinematicEnabled) return;
+    var stage = document.querySelector('.cinematic-stage');
+    if (!stage) return;
+
+    var currentBeat = 0;
+    var beats = Array.prototype.slice.call(document.querySelectorAll('.story-beat'));
+    var dots = Array.prototype.slice.call(document.querySelectorAll('.story-dot'));
+    var hint = document.getElementById('hint-pill');
+    var hintDismissed = false;
+
+    function dismissHint() {
+      if (hintDismissed || !hint) return;
+      hintDismissed = true;
+      hint.classList.remove('is-visible');
+    }
+
+    function setActiveBeat(i) {
+      if (i === currentBeat) return;
+      currentBeat = i;
+      beats.forEach(function (el) { el.classList.toggle('is-active', Number(el.dataset.beat) === i); });
+      dots.forEach(function (el) {
+        var active = Number(el.dataset.goto) === i;
+        el.classList.toggle('is-active', active);
+        if (active) el.setAttribute('aria-current', 'true'); else el.removeAttribute('aria-current');
+      });
+      if (i !== 0) dismissHint();
+      document.dispatchEvent(new CustomEvent('story:beat', { detail: { beat: i } }));
+    }
+
+    var sentinelIo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) setActiveBeat(Number(entry.target.dataset.sentinel));
+      });
+    }, { rootMargin: '-45% 0px -45% 0px', threshold: 0 });
+    document.querySelectorAll('.story-sentinel').forEach(function (el) { sentinelIo.observe(el); });
+
+    dots.forEach(function (dot) {
+      dot.addEventListener('click', function () {
+        var target = document.querySelector('.story-sentinel[data-sentinel="' + dot.dataset.goto + '"]');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    var replayBtn = document.getElementById('replay-chaos');
+    if (replayBtn) {
+      replayBtn.addEventListener('click', function () {
+        document.dispatchEvent(new CustomEvent('story:replay', { detail: { beat: currentBeat } }));
+      });
+    }
+
+    if (hint && hasHover) {
+      setTimeout(function () { if (currentBeat === 0) hint.classList.add('is-visible'); }, 1200);
+      setTimeout(dismissHint, 7000);
+      stage.addEventListener('pointermove', dismissHint, { once: true });
+    }
+  })();
+
+  // Particle scene (Three.js, lazy-loaded). One continuous field of soft points that idles in a
+  // slow drift and reshapes — chaos, rows, a page block, a card grid, a staircase, a waveform,
+  // stacked reels — as the beat controller above fires 'story:beat'. Bails out completely (no
+  // network request, no canvas) outside the cinematic breakpoint, or on save-data, missing WebGL,
+  // or a low-core-count device — the plain stacked story is already a complete experience.
+  (function () {
+    if (!cinematicEnabled) return;
+    var canvas = document.getElementById('story-canvas');
+    var stage = document.querySelector('.cinematic-stage');
+    if (!canvas || !stage) return;
+
+    var saveData = navigator.connection && navigator.connection.saveData;
+    var lowPower = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2;
+    if (saveData || lowPower) return;
+
+    var probe = document.createElement('canvas');
+    var gl = probe.getContext('webgl2') || probe.getContext('webgl');
+    if (!gl) return;
+
+    function hexToRgb(hex) {
+      var h = hex.trim().replace('#', '');
+      if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+      var n = parseInt(h, 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    }
+    function themeColors() {
+      var s = getComputedStyle(document.documentElement);
+      return {
+        base: hexToRgb(s.getPropertyValue('--text-dim')),
+        accent: hexToRgb(s.getPropertyValue('--emerald')),
+      };
+    }
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+
+    function chaosFormation(n) {
+      var arr = new Float32Array(n * 3);
+      for (var i = 0; i < n; i++) {
+        arr[i * 3] = rand(-7, 7);
+        arr[i * 3 + 1] = rand(-4.2, 4.2);
+        arr[i * 3 + 2] = rand(-4, 1.5);
+      }
+      return arr;
+    }
+    function bandsFormation(n) {
+      var arr = new Float32Array(n * 3);
+      var ROWS = 6, perRow = Math.ceil(n / ROWS);
+      for (var i = 0; i < n; i++) {
+        var row = i % ROWS, within = Math.floor(i / ROWS);
+        var rowWidth = 3 + (row % 3) * 1.4;
+        var x = (perRow > 1 ? within / (perRow - 1) - 0.5 : 0) * rowWidth;
+        var y = (row / (ROWS - 1) - 0.5) * 4.4;
+        arr[i * 3] = x + rand(-0.06, 0.06);
+        arr[i * 3 + 1] = y + rand(-0.06, 0.06);
+        arr[i * 3 + 2] = -1 + rand(-0.2, 0.2);
+      }
+      return arr;
+    }
+    function pageFormation(n) {
+      var arr = new Float32Array(n * 3);
+      var COLS = 16, ROWS = Math.ceil(n / COLS);
+      for (var i = 0; i < n; i++) {
+        var col = i % COLS, row = Math.floor(i / COLS);
+        var isGap = row % 5 === 4;
+        var w = isGap ? 1.3 : 4.2;
+        var x = (COLS > 1 ? col / (COLS - 1) - 0.5 : 0) * w;
+        var y = (ROWS > 1 ? row / (ROWS - 1) - 0.5 : 0) * 5.4;
+        arr[i * 3] = x + rand(-0.05, 0.05);
+        arr[i * 3 + 1] = y + rand(-0.05, 0.05);
+        arr[i * 3 + 2] = -1 + rand(-0.15, 0.15);
+      }
+      return arr;
+    }
+    function cardsFormation(n) {
+      var arr = new Float32Array(n * 3);
+      var CX = 3, CY = 2, CARDS = CX * CY, perCard = Math.ceil(n / CARDS);
+      var cardW = 2.0, cardH = 1.3, gapX = 0.7, gapY = 0.6;
+      var totalW = CX * cardW + (CX - 1) * gapX, totalH = CY * cardH + (CY - 1) * gapY;
+      var subCols = 7;
+      for (var i = 0; i < n; i++) {
+        var card = i % CARDS, within = Math.floor(i / CARDS);
+        var cCol = card % CX, cRow = Math.floor(card / CX);
+        var baseX = -totalW / 2 + cCol * (cardW + gapX) + cardW / 2;
+        var baseY = totalH / 2 - cRow * (cardH + gapY) - cardH / 2;
+        var subRows = Math.ceil(perCard / subCols);
+        var sc = within % subCols, sr = Math.floor(within / subCols);
+        var x = baseX + (subCols > 1 ? sc / (subCols - 1) - 0.5 : 0) * cardW;
+        var y = baseY + (subRows > 1 ? sr / (subRows - 1) - 0.5 : 0) * cardH;
+        arr[i * 3] = x + rand(-0.04, 0.04);
+        arr[i * 3 + 1] = y + rand(-0.04, 0.04);
+        arr[i * 3 + 2] = -1 + rand(-0.1, 0.1);
+      }
+      return arr;
+    }
+    function staircaseFormation(n) {
+      var arr = new Float32Array(n * 3);
+      var STEPS = 5, perStep = Math.ceil(n / STEPS);
+      for (var i = 0; i < n; i++) {
+        var step = i % STEPS, within = Math.floor(i / STEPS);
+        var stepW = 1.7;
+        var x = (perStep > 1 ? within / (perStep - 1) - 0.5 : 0) * stepW + (step - (STEPS - 1) / 2) * 1.35;
+        var y = (step / (STEPS - 1) - 0.5) * 4.6;
+        arr[i * 3] = x + rand(-0.05, 0.05);
+        arr[i * 3 + 1] = y + rand(-0.05, 0.05);
+        arr[i * 3 + 2] = -1 + rand(-0.15, 0.15);
+      }
+      return arr;
+    }
+    function waveFormation(n) {
+      var arr = new Float32Array(n * 3);
+      for (var i = 0; i < n; i++) {
+        var t = n > 1 ? i / (n - 1) : 0;
+        arr[i * 3] = (t - 0.5) * 9.5;
+        arr[i * 3 + 1] = Math.sin(t * Math.PI * 6) * 1.7 + rand(-0.08, 0.08);
+        arr[i * 3 + 2] = -1 + rand(-0.2, 0.2);
+      }
+      return arr;
+    }
+    function stackFormation(n) {
+      var arr = new Float32Array(n * 3);
+      var BLOBS = 3, perBlob = Math.ceil(n / BLOBS);
+      for (var i = 0; i < n; i++) {
+        var blob = i % BLOBS, within = Math.floor(i / BLOBS);
+        var frac = perBlob > 1 ? within / perBlob : 0;
+        var angle = frac * Math.PI * 2 * 7.3;
+        var r = 0.95 * Math.sqrt(frac);
+        var cy = (1 - blob) * 1.75;
+        arr[i * 3] = Math.cos(angle) * r;
+        arr[i * 3 + 1] = cy + Math.sin(angle) * r * 0.92;
+        arr[i * 3 + 2] = -1 + rand(-0.1, 0.1);
+      }
+      return arr;
+    }
+    var FORMATIONS = [chaosFormation, bandsFormation, pageFormation, cardsFormation, staircaseFormation, waveFormation, stackFormation];
+
+    function whenLoaded(cb) {
+      if (document.readyState === 'complete') cb();
+      else window.addEventListener('load', cb, { once: true });
+    }
+
+    whenLoaded(function () {
+      var started = false;
+      var bootIo = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting && !started) {
+          started = true;
+          bootIo.disconnect();
+          var kick = window.requestIdleCallback || function (cb) { setTimeout(cb, 200); };
+          kick(function () {
+            import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js')
+              .then(run)
+              .catch(function () { /* CDN unreachable — the story still works via CSS/beat-controller */ });
+          });
+        }
+      }, { threshold: 0.05 });
+      bootIo.observe(stage);
+    });
+
+    function run(THREE) {
+      var COUNT = window.innerWidth < 1100 ? 550 : 900;
+
+      var renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: false });
+      } catch (e) { return; }
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      renderer.setClearColor(0x000000, 0);
+
+      var scene = new THREE.Scene();
+      var camera = new THREE.PerspectiveCamera(50, 1, 0.1, 50);
+      camera.position.set(0, 0, 8);
+
+      var chaos = chaosFormation(COUNT);
+      var from = new Float32Array(chaos);
+      var to = new Float32Array(chaos);
+      var phases = new Float32Array(COUNT);
+      for (var i = 0; i < COUNT; i++) phases[i] = Math.random() * Math.PI * 2;
+
+      var geometry = new THREE.BufferGeometry();
+      // 'position' isn't read by the shader (aFrom/aTo drive gl_Position instead), but THREE
+      // still needs *some* position attribute present for its own bounding-sphere bookkeeping.
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(chaos), 3));
+      geometry.setAttribute('aFrom', new THREE.BufferAttribute(from, 3));
+      geometry.setAttribute('aTo', new THREE.BufferAttribute(to, 3));
+      geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+
+      var colors = themeColors();
+      var material = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: {
+          uTime: { value: 0 },
+          uMorphStart: { value: 0 },
+          uMouseWorld: { value: new THREE.Vector3(999, 999, 0) },
+          uPixelRatio: { value: renderer.getPixelRatio() },
+          uColor: { value: new THREE.Color(colors.base[0], colors.base[1], colors.base[2]) },
+          uAccent: { value: new THREE.Color(colors.accent[0], colors.accent[1], colors.accent[2]) },
+        },
+        vertexShader: [
+          'attribute vec3 aFrom;',
+          'attribute vec3 aTo;',
+          'attribute float aPhase;',
+          'uniform float uTime;',
+          'uniform float uMorphStart;',
+          'uniform vec3 uMouseWorld;',
+          'uniform float uPixelRatio;',
+          'varying float vAlpha;',
+          'varying float vInfluence;',
+          'void main() {',
+          '  float settle = smoothstep(0.0, 1.4, uTime - uMorphStart);',
+          '  vec3 base = mix(aFrom, aTo, settle);',
+          '  float t = uTime * 0.12 + aPhase;',
+          '  vec3 drift = vec3(',
+          '    sin(t + base.y * 0.5),',
+          '    cos(t * 1.3 + base.x * 0.4),',
+          '    sin(t * 0.8 + base.z * 0.6)',
+          '  ) * 0.18;',
+          '  vec3 pos = base + drift;',
+          '  vec2 toMouse = pos.xy - uMouseWorld.xy;',
+          '  float dist = length(toMouse);',
+          '  float influence = smoothstep(2.2, 0.0, dist);',
+          '  pos.xy += normalize(toMouse + 1e-4) * influence * 0.5;',
+          '  vInfluence = influence;',
+          '  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);',
+          '  vAlpha = clamp(1.0 - (-mvPosition.z - 3.0) / 8.0, 0.12, 0.65);',
+          '  gl_PointSize = uPixelRatio * (150.0 / -mvPosition.z);',
+          '  gl_Position = projectionMatrix * mvPosition;',
+          '}',
+        ].join('\n'),
+        fragmentShader: [
+          'uniform vec3 uColor;',
+          'uniform vec3 uAccent;',
+          'varying float vAlpha;',
+          'varying float vInfluence;',
+          'void main() {',
+          '  float d = length(gl_PointCoord - 0.5);',
+          '  if (d > 0.5) discard;',
+          '  float edge = smoothstep(0.5, 0.08, d);',
+          '  vec3 color = mix(uColor, uAccent, clamp(vInfluence * 1.6, 0.0, 1.0));',
+          '  gl_FragColor = vec4(color, edge * vAlpha);',
+          '}',
+        ].join('\n'),
+      });
+
+      var points = new THREE.Points(geometry, material);
+      points.frustumCulled = false; // bounding sphere is computed from the unused 'position' attribute
+      scene.add(points);
+
+      function resize() {
+        var w = stage.clientWidth, h = stage.clientHeight;
+        if (!w || !h) return;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      resize();
+      var resizeTimer;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resize, 150);
+      });
+
+      var raycaster = new THREE.Raycaster();
+      var mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+      var mouseTarget = new THREE.Vector3(999, 999, 0);
+      var mouseHit = new THREE.Vector3();
+      // Sentinel (999,999) means "no pointer" — kept far outside the field so the shader's
+      // distance-based influence naturally evaluates to ~0 without a separate flag.
+      var pointerNdc = new THREE.Vector2(999, 999);
+
+      if (hasHover) {
+        stage.addEventListener('pointermove', function (e) {
+          var r = stage.getBoundingClientRect();
+          pointerNdc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+          pointerNdc.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+        });
+        stage.addEventListener('pointerleave', function () { pointerNdc.set(999, 999); });
+      }
+
+      var clock = new THREE.Clock();
+
+      function morphTo(beatIndex, fromArr) {
+        var next = FORMATIONS[beatIndex](COUNT);
+        geometry.attributes.aFrom.array.set(fromArr || geometry.attributes.aTo.array);
+        geometry.attributes.aFrom.needsUpdate = true;
+        geometry.attributes.aTo.array.set(next);
+        geometry.attributes.aTo.needsUpdate = true;
+        material.uniforms.uMorphStart.value = clock.getElapsedTime();
+      }
+
+      document.addEventListener('story:beat', function (e) { morphTo(e.detail.beat); });
+      document.addEventListener('story:replay', function (e) { morphTo(e.detail.beat, chaosFormation(COUNT)); });
+
+      var frameId = null;
+      function tick() {
+        frameId = requestAnimationFrame(tick);
+        if (pointerNdc.x <= 1) {
+          raycaster.setFromCamera(pointerNdc, camera);
+          if (raycaster.ray.intersectPlane(mousePlane, mouseHit)) mouseTarget.copy(mouseHit);
+        } else {
+          mouseTarget.set(999, 999, 0);
+        }
+        material.uniforms.uMouseWorld.value.lerp(mouseTarget, 0.12);
+        material.uniforms.uTime.value = clock.getElapsedTime();
+        renderer.render(scene, camera);
+      }
+      function start() { if (frameId === null) tick(); }
+      function stop() { if (frameId !== null) { cancelAnimationFrame(frameId); frameId = null; } }
+
+      var visIo = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting && document.visibilityState === 'visible') start();
+        else stop();
+      }, { threshold: 0 });
+      visIo.observe(stage);
+
+      document.addEventListener('visibilitychange', function () {
+        var r = stage.getBoundingClientRect();
+        var inView = r.bottom > 0 && r.top < window.innerHeight;
+        if (document.visibilityState === 'visible' && inView) start();
+        else stop();
+      });
+
+      var themeObserver = new MutationObserver(syncTheme);
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+      function syncTheme() {
+        var c = themeColors();
+        material.uniforms.uColor.value.setRGB(c.base[0], c.base[1], c.base[2]);
+        material.uniforms.uAccent.value.setRGB(c.accent[0], c.accent[1], c.accent[2]);
+      }
+
+      start();
+      canvas.classList.add('is-ready');
+    }
+  })();
+</script>
+</body>
+</html>
