@@ -4,6 +4,8 @@
 
 Give it a subject, a level, and how deep you want to go. It plans a topic roadmap, writes structured notes topic-by-topic, and then lets you test yourself, drill flashcards, listen to an AI-narrated podcast version, or learn the same topic through a swipeable feed of short YouTube videos.
 
+**[→ See the project intro page](https://jadejapriyanshiba.github.io/ai-note-maker/)**
+
 ---
 
 ## Why it exists
