@@ -34,6 +34,7 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [filters, setFilters] = useState<LearningSessionFilter>(DEFAULT_FILTERS);
   const [useCustomShortLength, setUseCustomShortLength] = useState(false);
+  const [customShortLength, setCustomShortLength] = useState<string>("");
 
   const effectiveTime = useCustom ? Math.max(1, Number(customTime) || 0) : timeLimit;
   const estimatedNodes = Math.max(1, Math.min(leafCount, Math.round(effectiveTime / 5)));
@@ -152,7 +153,10 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
                 ))}
                 <button
                   type="button"
-                  onClick={() => setUseCustomShortLength(true)}
+                  onClick={() => {
+                    setUseCustomShortLength(true);
+                    setCustomShortLength(String(filters.shortsMaxDurationSeconds ?? 60));
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                     useCustomShortLength
                       ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
@@ -166,8 +170,20 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
                     type="number"
                     min={15}
                     max={180}
-                    value={filters.shortsMaxDurationSeconds ?? 60}
-                    onChange={(e) => setFilters({ ...filters, shortsMaxDurationSeconds: Number(e.target.value) || 60 })}
+                    value={customShortLength}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setCustomShortLength(raw);
+                      const num = Number(raw);
+                      if (raw !== "" && !Number.isNaN(num)) {
+                        setFilters({ ...filters, shortsMaxDurationSeconds: num });
+                      }
+                    }}
+                    onBlur={() => {
+                      const clamped = Math.min(180, Math.max(15, Number(customShortLength) || 60));
+                      setCustomShortLength(String(clamped));
+                      setFilters({ ...filters, shortsMaxDurationSeconds: clamped });
+                    }}
                     placeholder="Seconds"
                     className="w-24 px-2.5 py-1.5 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                   />
