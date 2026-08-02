@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
+import { Modal } from "../Modal";
+import { EmptyState } from "../EmptyState";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
 import {
   CommunityNote,
   NoteDocument,
@@ -342,14 +346,23 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
       </div>
 
       {/* Community Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredHubs.length === 0 && filteredNotes.length === 0 ? (
+        <EmptyState message="No community resources match yet. Be the first to publish one." />
+      ) : (
+      <motion.div
+        variants={staggerContainer()}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      >
         {/* Topic Hub Cards */}
         {(activeTab === "all" || activeTab === "topic_hub") &&
           filteredHubs.map((hub) => (
-            <div
+            <motion.div
               key={hub.id}
+              variants={fadeInUp}
               onClick={() => setSelectedHub(hub)}
-              className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-zinc-200 dark:border-zinc-800 p-5 shadow-sm hover:shadow-md hover:border-zinc-900 dark:hover:border-zinc-100 transition-all cursor-pointer flex flex-col justify-between space-y-4 group relative"
+              className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-md hover:border-zinc-900 dark:hover:border-zinc-100 transition-all cursor-pointer flex flex-col justify-between space-y-4 group relative"
             >
               <div className="space-y-3">
                 {/* Type Badge & Subject */}
@@ -442,7 +455,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
 
         {/* Regular Community Resource Cards (Notes, Flashcard Decks, Collections) */}
@@ -451,9 +464,10 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
             const resType = comm.resourceType || (comm.content ? "note" : "flashcard_deck");
             const isAuthor = currentUserId && comm.authorId === currentUserId;
             return (
-              <div
+              <motion.div
                 key={comm.id}
-                className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-4"
+                variants={fadeInUp}
+                className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
                   {/* Type Badge & Subject */}
@@ -580,15 +594,15 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-      </div>
+      </motion.div>
+      )}
 
       {/* Read / Preview Resource Modal */}
-      {activeResource && (
-        <div className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-3xl w-full max-h-[88vh] overflow-y-auto space-y-6 shadow-2xl">
+      <Modal isOpen={!!activeResource} onClose={() => setActiveResource(null)} panelClassName="max-w-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
+        {activeResource && (<>
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-zinc-200 dark:border-zinc-800 pb-4">
               <div className="space-y-1">
@@ -773,14 +787,11 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        </>)}
+      </Modal>
 
       {/* Content Report Modal */}
-      {reportTargetId && (
-        <div className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 max-w-md w-full space-y-4 shadow-2xl">
+      <Modal isOpen={!!reportTargetId} onClose={() => setReportTargetId(null)} panelClassName="max-w-md p-6 space-y-4 shadow-2xl">
             <h3 className="font-bold text-base text-zinc-900 dark:text-white flex items-center space-x-2">
               <Flag className="w-4 h-4 text-rose-500" />
               <span>Report Resource</span>
@@ -814,9 +825,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                 Submit Flag
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Global Publish Modal */}
       <PublishModal

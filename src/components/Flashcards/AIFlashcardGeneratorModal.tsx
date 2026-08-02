@@ -3,6 +3,7 @@ import { Sparkles, Loader2, X, Check, Edit2, Trash2, Layers, Folder, Plus } from
 import { NoteDocument, FlashcardDeck, Flashcard, Collection } from "../../types";
 import { generateFlashcards } from "../../lib/aiService";
 import { getCollections, saveFlashcardDeck, saveFlashcardBatch, getSavedNotes } from "../../lib/storage";
+import { Modal } from "../Modal";
 
 interface AIFlashcardGeneratorModalProps {
   isOpen: boolean;
@@ -49,27 +50,20 @@ export const AIFlashcardGeneratorModal: React.FC<AIFlashcardGeneratorModalProps>
   const [editingCardIdx, setEditingCardIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      const notes = getSavedNotes();
-      const cols = getCollections();
-      setAllNotes(notes);
-      setCollections(cols);
+    if (!isOpen) return;
+    const notes = getSavedNotes();
+    const cols = getCollections();
+    setAllNotes(notes);
+    setCollections(cols);
 
-      if (preselectedNote) {
-        setSelectedNoteId(preselectedNote.id);
-        setTopic(preselectedNote.title);
-        // Combine summaries
-        const text = preselectedNote.sections.map((s) => `${s.title}: ${s.summary}`).join("\n\n");
-        setContentSnippet(text);
-        setCollectionId(preselectedNote.collectionId || null);
-      }
-    } else {
-      document.body.style.overflow = "";
+    if (preselectedNote) {
+      setSelectedNoteId(preselectedNote.id);
+      setTopic(preselectedNote.title);
+      // Combine summaries
+      const text = preselectedNote.sections.map((s) => `${s.title}: ${s.summary}`).join("\n\n");
+      setContentSnippet(text);
+      setCollectionId(preselectedNote.collectionId || null);
     }
-    return () => {
-      document.body.style.overflow = "";
-    };
   }, [isOpen, preselectedNote]);
 
   const handleNoteSelectChange = (noteId: string) => {
@@ -150,17 +144,8 @@ export const AIFlashcardGeneratorModal: React.FC<AIFlashcardGeneratorModalProps>
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 my-auto max-h-[85vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-2xl p-6 shadow-2xl space-y-5 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
           <div className="flex items-center space-x-2">
@@ -423,7 +408,6 @@ export const AIFlashcardGeneratorModal: React.FC<AIFlashcardGeneratorModalProps>
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

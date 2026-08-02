@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { X, Clock, SlidersHorizontal, Play, Film } from "lucide-react";
 import { LearningSessionFilter } from "../../types";
+import { Modal } from "../Modal";
 
 interface SessionSetupModalProps {
+  isOpen: boolean;
   leafCount: number;
-  onCancel: () => void;
+  onClose: () => void;
   onStart: (timeLimitMinutes: number, filters: LearningSessionFilter) => void;
 }
 
@@ -27,7 +29,7 @@ const CONTENT_FORMAT_OPTIONS: { value: LearningSessionFilter["contentFormat"]; l
   { value: "short", label: "Short-form", hint: "Vertical, quick videos" },
 ];
 
-export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount, onCancel, onStart }) => {
+export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ isOpen, leafCount, onClose, onStart }) => {
   const [timeLimit, setTimeLimit] = useState<number>(20);
   const [customTime, setCustomTime] = useState<string>("");
   const [useCustom, setUseCustom] = useState(false);
@@ -40,8 +42,7 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
   const estimatedNodes = Math.max(1, Math.min(leafCount, Math.round(effectiveTime / 5)));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
+    <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-lg p-4 sm:p-6 space-y-5">
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Start Learning Session</h2>
@@ -50,7 +51,7 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
             </p>
           </div>
           <button
-            onClick={onCancel}
+            onClick={onClose}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             <X className="w-4 h-4" />
@@ -278,7 +279,7 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
 
         <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
           <button
-            onClick={onCancel}
+            onClick={onClose}
             className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             Cancel
@@ -292,7 +293,6 @@ export const SessionSetupModal: React.FC<SessionSetupModalProps> = ({ leafCount,
             <span>Start Learning</span>
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

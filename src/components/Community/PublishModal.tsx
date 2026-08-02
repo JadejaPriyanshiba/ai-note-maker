@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Globe, ShieldCheck, Check, X, BookOpen, Layers, Folder, Compass, Plus, Trash2 } from "lucide-react";
 import {
   NoteDocument,
@@ -23,6 +23,7 @@ import {
   publishTopicHub,
 } from "../../lib/storage";
 import { auth } from "../../lib/firebase";
+import { Modal } from "../Modal";
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -93,19 +94,6 @@ export const PublishModal: React.FC<PublishModalProps> = ({
   const [authorAlias, setAuthorAlias] = useState<string>("Student Scholar");
   const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,14 +243,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-2xl space-y-6 my-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-xl p-6 sm:p-8 shadow-2xl space-y-6">
         <div className="flex items-start justify-between border-b border-zinc-200 dark:border-zinc-800 pb-4">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900">
@@ -657,7 +638,6 @@ export const PublishModal: React.FC<PublishModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };

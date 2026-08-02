@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { RoadmapTopic, LearnerLevel, Complexity, Depth, NoteLanguage } from "../types";
 import { ArrowUp, ArrowDown, Trash2, Plus, Copy, Sparkles, Play, Layers } from "lucide-react";
 import { suggestTopics } from "../lib/aiService";
+import { fadeInUp, staggerContainer } from "../lib/motion";
 
 interface RoadmapEditorProps {
   subject: string;
@@ -149,11 +151,19 @@ export const RoadmapEditor: React.FC<RoadmapEditorProps> = ({
       </div>
 
       {/* Topic List */}
-      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+      <motion.div
+        variants={staggerContainer(0.04)}
+        initial="hidden"
+        animate="show"
+        className="space-y-3 max-h-[500px] overflow-y-auto pr-2"
+      >
         {topics.map((topic, index) => (
-          <div
+          <motion.div
             key={topic.id}
-            className={`p-4 rounded-xl border transition-all ${
+            layout
+            variants={fadeInUp}
+            transition={{ layout: { duration: 0.2, ease: "easeOut" } }}
+            className={`p-4 rounded-2xl border transition-colors ${
               editingId === topic.id
                 ? "border-zinc-900 dark:border-zinc-100 ring-1 ring-zinc-400 bg-zinc-50/50 dark:bg-zinc-800/50"
                 : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/30 hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -222,9 +232,9 @@ export const RoadmapEditor: React.FC<RoadmapEditorProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       {/* Add Topic Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">

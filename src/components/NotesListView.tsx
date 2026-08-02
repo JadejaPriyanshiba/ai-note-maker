@@ -1,8 +1,11 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { NoteDocument } from "../types";
 import { getSavedNotes, deleteNote, saveNote } from "../lib/storage";
 import { FolderKanban, Search, Trash2, Edit3, CheckSquare, Sparkles, Star, GitFork, Plus } from "lucide-react";
 import { ConfirmModal } from "./ConfirmModal";
+import { EmptyState } from "./EmptyState";
+import { fadeInUp, staggerContainer } from "../lib/motion";
 
 interface NotesListViewProps {
   onOpenNoteStudio: (note: NoteDocument) => void;
@@ -98,15 +101,21 @@ export const NotesListView: React.FC<NotesListViewProps> = ({
 
       {/* Notes Grid */}
       {filteredNotes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div
+          variants={staggerContainer()}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
           {filteredNotes.map((note) => {
             const completedCount = (note.roadmap || []).filter((t) => t.status === "completed").length;
             const totalCount = (note.roadmap || []).length;
             const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
             return (
-              <div
+              <motion.div
                 key={note.id}
+                variants={fadeInUp}
                 onClick={() => onOpenNoteStudio(note)}
                 className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex flex-col justify-between space-y-4"
               >
@@ -167,14 +176,12 @@ export const NotesListView: React.FC<NotesListViewProps> = ({
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       ) : (
-        <div className="p-12 text-center text-zinc-500 text-xs font-light bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-          No matching study notes found.
-        </div>
+        <EmptyState icon={FolderKanban} message="No matching study notes found." />
       )}
 
       {/* Delete Confirmation Modal */}

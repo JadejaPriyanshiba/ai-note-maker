@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import { motion } from "motion/react";
+import { fadeInUp } from "../../lib/motion";
 import { NoteDocument, NoteSection, NoteBlock, StudentTagType, NoteVersion } from "../../types";
 import { saveNote, deleteNote, publishCommunityNote, remixCommunityNote } from "../../lib/storage";
 import { selectionAction } from "../../lib/aiService";
@@ -685,7 +687,12 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setIsExportOpen(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl py-1.5 z-50"
+                  >
                     <button
                       onClick={handlePrintPDF}
                       className="w-full text-left px-3.5 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-2.5 transition-colors"
@@ -714,7 +721,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                       <Download className="w-4 h-4 text-zinc-600 dark:text-zinc-400 shrink-0" />
                       <span>Export JSON (.json)</span>
                     </button>
-                  </div>
+                  </motion.div>
                 </>
               )}
             </div>
@@ -763,7 +770,13 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
         {/* Right Column: Section Content Canvas */}
         <div className="md:col-span-3 space-y-6">
           {activeSection ? (
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-xs space-y-6 print:shadow-none print:border-none print:p-0">
+            <motion.div
+              key={activeSection.id}
+              initial="hidden"
+              animate="show"
+              variants={fadeInUp}
+              className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-xs space-y-6 print:shadow-none print:border-none print:p-0"
+            >
               {/* Section Title */}
               <div className="border-b border-zinc-200 dark:border-zinc-800 pb-4">
                 {isReadOnlyState ? (
@@ -1021,7 +1034,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                   </div>
                 );
               })()}
-            </div>
+            </motion.div>
           ) : (
             <div className="p-12 text-center text-zinc-500">Select a section to edit</div>
           )}
@@ -1030,9 +1043,12 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
 
       {/* Floating Selection AI Action Menu */}
       {selectedText && selectionPos && (
-        <div
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.15 }}
           style={{ top: Math.max(80, selectionPos.y - 60), left: Math.min(window.innerWidth - 320, Math.max(20, selectionPos.x - 150)) }}
-          className="fixed z-50 bg-zinc-900 text-white rounded-2xl shadow-2xl border border-zinc-700 p-3 max-w-md w-80 space-y-2 animate-in fade-in zoom-in-95 duration-150"
+          className="fixed z-50 bg-zinc-900 text-white rounded-2xl shadow-2xl border border-zinc-700 p-3 max-w-md w-80 space-y-2"
         >
           <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
             <span className="text-[10px] font-bold uppercase text-zinc-300 flex items-center space-x-1">
@@ -1105,7 +1121,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
               </button>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Publish Community Modal */}
@@ -1149,7 +1165,12 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
 
       {/* Full Screen View Overlay */}
       {isFullScreen && (
-        <div className="fixed inset-0 z-50 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden animate-in fade-in duration-200">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-50 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden"
+        >
           {/* Full Screen Minimal Header */}
           <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4 shadow-xs">
             <div className="flex items-center space-x-3 min-w-0">
@@ -1287,7 +1308,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
               </div>
             );
           })()}
-        </div>
+        </motion.div>
       )}
 
       {/* Hidden Printable Container for Print / Save PDF */}

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion } from "motion/react";
 import { NoteDocument, RoadmapTopic, NoteSection } from "../types";
 import { generateTopicNotes } from "../lib/aiService";
 import { saveNote } from "../lib/storage";
 import { CheckCircle2, Loader2, AlertTriangle, ArrowRight, RefreshCw, SkipForward, ShieldCheck, FastForward } from "lucide-react";
+import { fadeInUp, staggerContainer } from "../lib/motion";
 
 interface GenerationProgressProps {
   note: NoteDocument;
@@ -329,11 +331,19 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
       )}
 
       {/* Topic Status Cards */}
-      <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
+      <motion.div
+        variants={staggerContainer(0.04)}
+        initial="hidden"
+        animate="show"
+        className="space-y-3 max-h-[360px] overflow-y-auto pr-2"
+      >
         {(note.roadmap || []).map((topic, index) => (
-          <div
+          <motion.div
             key={topic.id}
-            className={`p-3.5 rounded-xl border flex items-center justify-between transition-all ${
+            layout
+            variants={fadeInUp}
+            transition={{ layout: { duration: 0.2, ease: "easeOut" } }}
+            className={`p-3.5 rounded-2xl border flex items-center justify-between transition-colors ${
               topic.status === "completed"
                 ? "bg-zinc-50 dark:bg-zinc-800/60 border-zinc-300 dark:border-zinc-700"
                 : topic.status === "generating"
@@ -417,7 +427,7 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
                   <button
                     type="button"
                     onClick={() => retryTopic(index)}
-                    className="px-2 py-0.5 rounded text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                    className="px-2 py-0.5 rounded text-xs text-zinc-700 dark:text-zinc-300 hover:underline font-medium"
                   >
                     Generate
                   </button>
@@ -429,9 +439,9 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
                 </span>
               )}
             </div>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       {/* Incremental Protection Notice */}
       <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 font-light">

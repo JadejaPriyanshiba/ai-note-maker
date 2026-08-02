@@ -580,16 +580,15 @@ export const LearningMapView: React.FC<LearningMapViewProps> = ({
         </div>
       )}
 
-      {showSessionSetup && (
-        <SessionSetupModal
-          leafCount={leafNodes.length}
-          onCancel={() => setShowSessionSetup(false)}
-          onStart={(timeLimitMinutes, filters) => {
-            setShowSessionSetup(false);
-            onStartSession({ ...tree, nodes }, timeLimitMinutes, filters);
-          }}
-        />
-      )}
+      <SessionSetupModal
+        isOpen={showSessionSetup}
+        leafCount={leafNodes.length}
+        onClose={() => setShowSessionSetup(false)}
+        onStart={(timeLimitMinutes, filters) => {
+          setShowSessionSetup(false);
+          onStartSession({ ...tree, nodes }, timeLimitMinutes, filters);
+        }}
+      />
     </div>
   );
 };

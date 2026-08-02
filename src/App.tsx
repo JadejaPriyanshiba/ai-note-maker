@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { motion, MotionConfig } from "motion/react";
+import { viewTransition } from "./lib/motion";
 import { Header } from "./components/Header";
 import { HomeView } from "./components/HomeView";
 import { NotesListView } from "./components/NotesListView";
@@ -139,6 +141,16 @@ export default function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [theme]);
+
+  // Land at the top of the new view on every navigation — otherwise the entrance transition
+  // below can play off-screen if the user was scrolled down in the previous view.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [activeView]);
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
 
   // Sync Cloud Data on User Auth change
   useEffect(() => {
@@ -370,6 +382,7 @@ export default function App() {
   };
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Header Navigation */}
       <Header
@@ -391,6 +404,12 @@ export default function App() {
 
       {/* Main View Router */}
       <main className="flex-1 pb-16">
+      <motion.div
+        key={activeView}
+        initial={isFirstRender.current ? false : "initial"}
+        animate="animate"
+        variants={viewTransition}
+      >
         {activeView === "home" && (
           <HomeView
             onStartRoadmap={handleStartRoadmap}
@@ -640,6 +659,7 @@ export default function App() {
             onTestMe={handleTestMeFromShorts}
           />
         )}
+      </motion.div>
       </main>
 
       {/* Global Modals */}
@@ -669,5 +689,6 @@ export default function App() {
         }}
       />
     </div>
+    </MotionConfig>
   );
 }
