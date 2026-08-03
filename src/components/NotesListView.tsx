@@ -1,14 +1,18 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { NoteDocument } from "../types";
 import { getSavedNotes, deleteNote, saveNote } from "../lib/storage";
-import { FolderKanban, Search, Trash2, Edit3, CheckSquare, Sparkles, Star, GitFork, Plus } from "lucide-react";
+import { FolderKanban, Search, Trash2, Edit3, CheckSquare, Sparkles, Star, GitFork, Plus, PlayCircle } from "lucide-react";
 import { ConfirmModal } from "./ConfirmModal";
+import { EmptyState } from "./EmptyState";
+import { fadeInUp, staggerContainer } from "../lib/motion";
 
 interface NotesListViewProps {
   onOpenNoteStudio: (note: NoteDocument) => void;
   onOpenTest: (note: NoteDocument) => void;
   onOpenAudio: (note: NoteDocument) => void;
   onCreateNew: () => void;
+  onContinueGeneration: (note: NoteDocument) => void;
 }
 
 export const NotesListView: React.FC<NotesListViewProps> = ({
@@ -16,6 +20,7 @@ export const NotesListView: React.FC<NotesListViewProps> = ({
   onOpenTest,
   onOpenAudio,
   onCreateNew,
+  onContinueGeneration,
 }) => {
   const [notes, setNotes] = useState<NoteDocument[]>(getSavedNotes());
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -98,15 +103,25 @@ export const NotesListView: React.FC<NotesListViewProps> = ({
 
       {/* Notes Grid */}
       {filteredNotes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div
+          variants={staggerContainer()}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
           {filteredNotes.map((note) => {
             const completedCount = (note.roadmap || []).filter((t) => t.status === "completed").length;
+            const skippedCount = (note.roadmap || []).filter((t) => t.status === "skipped").length;
             const totalCount = (note.roadmap || []).length;
             const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+            // Left incomplete by a closed tab, reload, or "View Saved Notes" mid-generation —
+            // still has pending/failed/stalled topics with no active job tracking it anymore.
+            const isIncomplete = totalCount > 0 && completedCount + skippedCount < totalCount;
 
             return (
-              <div
+              <motion.div
                 key={note.id}
+                variants={fadeInUp}
                 onClick={() => onOpenNoteStudio(note)}
                 className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex flex-col justify-between space-y-4"
               >
@@ -137,6 +152,20 @@ export const NotesListView: React.FC<NotesListViewProps> = ({
                       <div className="bg-zinc-900 dark:bg-zinc-100 h-full rounded-full" style={{ width: `${percent}%` }} />
                     </div>
                   </div>
+
+                  {isIncomplete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onContinueGeneration(note);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-amber-100 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center justify-center space-x-1.5 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                      title="Resume generating the remaining topics"
+                    >
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      <span>Continue Generating ({totalCount - completedCount - skippedCount} left)</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Footer Action Buttons */}
@@ -167,14 +196,12 @@ export const NotesListView: React.FC<NotesListViewProps> = ({
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       ) : (
-        <div className="p-12 text-center text-zinc-500 text-xs font-light bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-          No matching study notes found.
-        </div>
+        <EmptyState icon={FolderKanban} message="No matching study notes found." />
       )}
 
       {/* Delete Confirmation Modal */}

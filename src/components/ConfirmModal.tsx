@@ -1,5 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { AlertTriangle, Trash2, X } from "lucide-react";
+import { Modal } from "./Modal";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -22,28 +23,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   onClose,
 }) => {
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl max-w-md w-full p-6 space-y-4 text-left relative my-auto max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-md p-6 space-y-4 text-left relative">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -99,7 +80,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             {confirmText}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

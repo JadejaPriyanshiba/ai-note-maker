@@ -120,5 +120,10 @@ service cloud.firestore {
       allow read, update, delete: if isDocOwner();
       allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
     }
+
+    match /podcasts/{podcastId} {
+      allow read, update, delete: if isDocOwner();
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+    }
   }
 }

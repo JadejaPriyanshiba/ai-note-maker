@@ -29,6 +29,7 @@ import {
   unpublishTopicHub,
 } from "../../lib/storage";
 import { auth } from "../../lib/firebase";
+import { Modal } from "../Modal";
 
 interface TopicHubDetailModalProps {
   hub: CommunityTopicHub | null;
@@ -54,34 +55,38 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
   const [cardIdx, setCardIdx] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
 
+  // Keeps rendering the last-open hub's content while the close animation plays (the `hub`
+  // prop itself goes null immediately on close, which would otherwise blank the modal mid-exit).
+  const [displayHub, setDisplayHub] = useState<CommunityTopicHub | null>(hub);
   useEffect(() => {
-    if (hub) {
-      document.body.style.overflow = "hidden";
-      if (hub.resources && hub.resources.length > 0) {
-        setSelectedResource(hub.resources[0]);
-      }
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    if (hub) setDisplayHub(hub);
   }, [hub]);
 
-  if (!hub) return null;
+  // Reset per-hub UI state only when actually switching to a *different* hub — not on every
+  // content refresh of the same hub (e.g. a save-count bump), which previously left stale
+  // activeTab/selectedResource/flip state behind when jumping between hubs without closing.
+  useEffect(() => {
+    if (!hub) return;
+    setActiveTab("overview");
+    setSelectedResource(displayHub.resources && displayHub.resources.length > 0 ? displayHub.resources[0] : null);
+    setCardIdx(0);
+    setIsFlipped(false);
+  }, [hub?.id]);
+
+  if (!displayHub) return null;
 
   const currentUserId = auth.currentUser?.uid;
-  const isCreator = currentUserId ? hub.creatorId === currentUserId : false;
+  const isCreator = currentUserId ? displayHub.creatorId === currentUserId : false;
 
   const handleToggleSave = () => {
-    toggleSaveTopicHub(hub);
+    toggleSaveTopicHub(displayHub);
     onRefresh();
   };
 
   const handleRemixHub = () => {
     try {
-      const remixed = remixTopicHub(hub);
-      alert(`Remixed Topic Hub "${hub.title}" into your private workspace!`);
+      const remixed = remixTopicHub(displayHub);
+      alert(`Remixed Topic Hub "${displayHub.title}" into your private workspace!`);
       onRefresh();
       onClose();
     } catch (e: any) {
@@ -90,8 +95,8 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
   };
 
   const handleUnpublish = () => {
-    if (confirm(`Are you sure you want to unpublish "${hub.title}" from the Community?`)) {
-      unpublishTopicHub(hub.id);
+    if (confirm(`Are you sure you want to unpublish "${displayHub.title}" from the Community?`)) {
+      unpublishTopicHub(displayHub.id);
       alert("Topic Hub unpublished.");
       onRefresh();
       onClose();
@@ -112,55 +117,48 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-6 my-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={!!hub} onClose={onClose} panelClassName="max-w-4xl p-6 sm:p-8 shadow-2xl space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-200 dark:border-zinc-800 pb-5">
           <div className="space-y-2 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
               <span className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
-                {hub.subject}
+                {displayHub.subject}
               </span>
-              {hub.topic && (
+              {displayHub.topic && (
                 <>
                   <span>•</span>
-                  <span>{hub.topic}</span>
+                  <span>{displayHub.topic}</span>
                 </>
               )}
-              {hub.difficulty && (
+              {displayHub.difficulty && (
                 <>
                   <span>•</span>
-                  <span className="text-zinc-400">{hub.difficulty}</span>
+                  <span className="text-zinc-400">{displayHub.difficulty}</span>
                 </>
               )}
-              {hub.version && hub.version > 1 && (
+              {displayHub.version && displayHub.version > 1 && (
                 <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-mono text-[10px]">
-                  v{hub.version}
+                  v{displayHub.version}
                 </span>
               )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white tracking-tight">
-              {hub.title}
+              {displayHub.title}
             </h1>
 
             <div className="flex items-center space-x-3 text-xs text-zinc-500">
               <div className="flex items-center space-x-1.5">
                 <User className="w-3.5 h-3.5" />
                 <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                  @{hub.creatorName}
+                  @{displayHub.creatorName}
                 </span>
               </div>
               <span>•</span>
               <div className="flex items-center space-x-1">
                 <Clock className="w-3.5 h-3.5" />
-                <span>Est. {hub.stats?.estimatedStudyMinutes || 45} mins</span>
+                <span>Est. {displayHub.stats?.estimatedStudyMinutes || 45} mins</span>
               </div>
             </div>
           </div>
@@ -195,7 +193,7 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Learning Path ({hub.learningPath?.length || hub.resources.length})</span>
+            <span>Learning Path ({displayHub.learningPath?.length || displayHub.resources.length})</span>
           </button>
 
           <button
@@ -206,10 +204,10 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
                 : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             }`}
           >
-            Resources ({hub.resources.length})
+            Resources ({displayHub.resources.length})
           </button>
 
-          {hub.lineage && hub.lineage.length > 0 && (
+          {displayHub.lineage && displayHub.lineage.length > 0 && (
             <button
               onClick={() => setActiveTab("lineage")}
               className={`px-4 py-2 rounded-xl transition-all flex items-center space-x-1.5 ${
@@ -219,7 +217,7 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
               }`}
             >
               <GitFork className="w-3.5 h-3.5" />
-              <span>Lineage ({hub.lineage.length})</span>
+              <span>Lineage ({displayHub.lineage.length})</span>
             </button>
           )}
         </div>
@@ -228,28 +226,28 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
         {activeTab === "overview" && (
           <div className="space-y-6">
             <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
-              {hub.description}
+              {displayHub.description}
             </p>
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-3 gap-3">
               <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700/80 text-center space-y-1">
                 <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400">
-                  {hub.stats?.notesCount || 0}
+                  {displayHub.stats?.notesCount || 0}
                 </span>
                 <p className="text-xs font-semibold text-zinc-500">Notes</p>
               </div>
 
               <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700/80 text-center space-y-1">
                 <span className="text-xl font-extrabold text-purple-600 dark:text-purple-400">
-                  {hub.stats?.decksCount || 0}
+                  {displayHub.stats?.decksCount || 0}
                 </span>
                 <p className="text-xs font-semibold text-zinc-500">Flashcard Decks</p>
               </div>
 
               <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700/80 text-center space-y-1">
                 <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {hub.stats?.testsCount || 0}
+                  {displayHub.stats?.testsCount || 0}
                 </span>
                 <p className="text-xs font-semibold text-zinc-500">Practice Tests</p>
               </div>
@@ -261,7 +259,7 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
                 Included Topic Resources
               </h3>
               <div className="space-y-2">
-                {hub.resources.map((res, index) => (
+                {displayHub.resources.map((res, index) => (
                   <div
                     key={res.id || index}
                     className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex items-center justify-between"
@@ -303,7 +301,7 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
             </p>
 
             <div className="relative pl-6 border-l-2 border-zinc-200 dark:border-zinc-800 space-y-6">
-              {(hub.learningPath || hub.resources.map((r, i) => ({
+              {(displayHub.learningPath || displayHub.resources.map((r, i) => ({
                 stepIndex: i + 1,
                 title: r.title,
                 description: r.description,
@@ -347,7 +345,7 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
                 Topic Items
               </h3>
-              {hub.resources.map((res) => (
+              {displayHub.resources.map((res) => (
                 <button
                   key={res.id}
                   onClick={() => {
@@ -498,11 +496,11 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
         {activeTab === "lineage" && (
           <div className="space-y-4">
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Provenance and attribution tree tracking community evolution of this topic hub.
+              Provenance and attribution tree tracking community evolution of this topic displayHub.
             </p>
 
             <div className="space-y-3">
-              {(hub.lineage || []).map((lin, idx) => (
+              {(displayHub.lineage || []).map((lin, idx) => (
                 <div
                   key={lin.id || idx}
                   className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 flex items-center justify-between text-xs"
@@ -543,13 +541,13 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
             <button
               onClick={handleToggleSave}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 border transition-all ${
-                hub.userSaved
+                displayHub.userSaved
                   ? "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
                   : "border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
               }`}
             >
-              <Bookmark className={`w-3.5 h-3.5 ${hub.userSaved ? "fill-amber-500 text-amber-500" : ""}`} />
-              <span>{hub.userSaved ? "Saved" : "Save Hub"} ({hub.savesCount || 0})</span>
+              <Bookmark className={`w-3.5 h-3.5 ${displayHub.userSaved ? "fill-amber-500 text-amber-500" : ""}`} />
+              <span>{displayHub.userSaved ? "Saved" : "Save Hub"} ({displayHub.savesCount || 0})</span>
             </button>
 
             <button
@@ -557,11 +555,10 @@ export const TopicHubDetailModal: React.FC<TopicHubDetailModalProps> = ({
               className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 font-bold text-xs flex items-center space-x-1.5 shadow-xs"
             >
               <GitFork className="w-4 h-4" />
-              <span>Remix Entire Topic Hub ({hub.remixesCount || 0})</span>
+              <span>Remix Entire Topic Hub ({displayHub.remixesCount || 0})</span>
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

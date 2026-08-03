@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Folder, FolderPlus, ChevronRight, Check, X, Layers, Plus } from "lucide-react";
 import { Collection } from "../../types";
 import { getCollections, saveCollection, getCollectionPath } from "../../lib/storage";
+import { Modal } from "../Modal";
 
 interface CollectionSelectorModalProps {
   isOpen: boolean;
@@ -25,22 +26,13 @@ export const CollectionSelectorModal: React.FC<CollectionSelectorModalProps> = (
   const [newColDesc, setNewColDesc] = useState("");
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      const allCols = getCollections();
-      setCollections(allCols);
-      setIsCreatingInline(false);
-      setNewColName("");
-      setNewColDesc("");
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    if (!isOpen) return;
+    const allCols = getCollections();
+    setCollections(allCols);
+    setIsCreatingInline(false);
+    setNewColName("");
+    setNewColDesc("");
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const currentPath = getCollectionPath(activeParentId, collections);
   const childCollections = collections.filter((c) => c.parentCollectionId === activeParentId);
@@ -76,14 +68,7 @@ export const CollectionSelectorModal: React.FC<CollectionSelectorModalProps> = (
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 my-auto max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-lg p-6 shadow-2xl space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center space-x-2">
@@ -234,7 +219,6 @@ export const CollectionSelectorModal: React.FC<CollectionSelectorModalProps> = (
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

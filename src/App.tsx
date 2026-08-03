@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { motion, MotionConfig } from "motion/react";
+import { viewTransition } from "./lib/motion";
 import { Header } from "./components/Header";
 import { HomeView } from "./components/HomeView";
 import { NotesListView } from "./components/NotesListView";
@@ -19,7 +21,9 @@ import { FlashcardStudyView } from "./components/Flashcards/FlashcardStudyView";
 import { AIFlashcardGeneratorModal } from "./components/Flashcards/AIFlashcardGeneratorModal";
 import { AuthModal } from "./components/Auth/AuthModal";
 import { DataMigrationModal } from "./components/Auth/DataMigrationModal";
+import { GenerationStatusToast } from "./components/GenerationStatusToast";
 import { useAuth } from "./lib/AuthContext";
+import { useGeneration } from "./lib/GenerationContext";
 import { ShortsSetupView } from "./components/ShortsLearning/ShortsSetupView";
 import { LearningMapView } from "./components/ShortsLearning/LearningMapView";
 import { ShortsFeedView } from "./components/ShortsLearning/ShortsFeedView";
@@ -61,6 +65,7 @@ import { generateBatchedTestQuestions } from "./lib/aiService";
 
 export default function App() {
   const { user, setSyncing } = useAuth();
+  const { activeGeneration } = useGeneration();
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("app_theme");
     if (saved === "dark" || saved === "light") return saved;
@@ -140,6 +145,16 @@ export default function App() {
     }
   }, [theme]);
 
+  // Land at the top of the new view on every navigation — otherwise the entrance transition
+  // below can play off-screen if the user was scrolled down in the previous view.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [activeView]);
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
+
   // Sync Cloud Data on User Auth change
   useEffect(() => {
     if (user) {
@@ -183,12 +198,36 @@ export default function App() {
     setActiveView("roadmap_editor");
   };
 
+  // Only one background generation job runs at a time — starting a second would silently stall
+  // behind the first (see GenerationContext's loopActiveRef guard). Used before starting a fresh
+  // roadmap and before resuming an interrupted note.
+  const guardCanStartGeneration = (): boolean => {
+    if (activeGeneration?.isGenerating) {
+      alert(
+        `"${activeGeneration.note.title}" is still generating. Wait for it to finish (or check its progress from the status bar in the corner) before starting another one.`
+      );
+      return false;
+    }
+    return true;
+  };
+
+  // Resume a note that was left with pending/failed topics — e.g. generation was interrupted by
+  // a full page reload or closed tab, so GenerationContext has no memory of it anymore. Reads the
+  // per-topic status already persisted on the note itself to pick up right where it left off.
+  const handleContinueGeneration = (note: NoteDocument) => {
+    if (!guardCanStartGeneration()) return;
+    setActiveNote(note);
+    setBatchSize(1);
+    setActiveView("generation_progress");
+  };
+
   // Step 2: Approve Roadmap -> Create NoteDocument -> Move to GenerationProgress
   const handleApproveRoadmap = (
     approvedTopics: RoadmapTopic[],
     selectedBatchSize: number = 1
   ) => {
     if (!roadmapDraft) return;
+    if (!guardCanStartGeneration()) return;
 
     const newNote: NoteDocument = {
       id: `note_${Date.now()}`,
@@ -370,6 +409,7 @@ export default function App() {
   };
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Header Navigation */}
       <Header
@@ -391,6 +431,12 @@ export default function App() {
 
       {/* Main View Router */}
       <main className="flex-1 pb-16">
+      <motion.div
+        key={activeView}
+        initial={isFirstRender.current ? false : "initial"}
+        animate="animate"
+        variants={viewTransition}
+      >
         {activeView === "home" && (
           <HomeView
             onStartRoadmap={handleStartRoadmap}
@@ -400,6 +446,7 @@ export default function App() {
             }}
             onOpenCommunity={() => setActiveView("community")}
             onOpenTests={() => setActiveView("test_generator")}
+            onContinueGeneration={handleContinueGeneration}
           />
         )}
 
@@ -448,6 +495,7 @@ export default function App() {
               setActiveView("audio_learning");
             }}
             onCreateNew={() => setActiveView("home")}
+            onContinueGeneration={handleContinueGeneration}
           />
         )}
 
@@ -640,6 +688,7 @@ export default function App() {
             onTestMe={handleTestMeFromShorts}
           />
         )}
+      </motion.div>
       </main>
 
       {/* Global Modals */}
@@ -668,6 +717,17 @@ export default function App() {
           setActiveView("flashcard_editor");
         }}
       />
+
+      {/* Background note-generation status — visible from any view, see GenerationContext */}
+      <GenerationStatusToast
+        onOpenNote={(note) => {
+          const allDone = (note.roadmap || []).every((t) => t.status === "completed" || t.status === "skipped");
+          setActiveNote(note);
+          setIsNoteReadOnly(false);
+          setActiveView(allDone ? "note_studio" : "generation_progress");
+        }}
+      />
     </div>
+    </MotionConfig>
   );
 }

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { NoteDocument } from "../../types";
-import { generatePodcastScript } from "../../lib/aiService";
-import { 
-  Play, Pause, Square, SkipBack, SkipForward, Volume2, ShieldAlert, 
-  Sparkles, Car, Radio, ArrowLeft, Loader2 
+import { PodcastPlayer } from "./PodcastPlayer";
+import {
+  Play, Pause, Square, SkipBack, SkipForward, ShieldAlert,
+  Car, Radio, ArrowLeft
 } from "lucide-react";
 
 interface AudioLearningViewProps {
@@ -18,10 +18,6 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
-
-  // Podcast state
-  const [podcastDialogue, setPodcastDialogue] = useState<{ speaker: "Alex (Host)" | "Sam (Expert)"; text: string }[] | null>(null);
-  const [isGeneratingPodcast, setIsGeneratingPodcast] = useState<boolean>(false);
 
   const synthRef = useRef<SpeechSynthesis | null>(null);
 
@@ -69,9 +65,7 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
 
     synthRef.current.cancel();
 
-    const text = activeTab === "podcast" && podcastDialogue
-      ? podcastDialogue.map((d) => `${d.speaker} says: ${d.text}`).join(". ")
-      : getSectionSpeechText();
+    const text = getSectionSpeechText();
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = playbackSpeed;
@@ -117,19 +111,6 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
     handleStop();
     if (activeSectionIndex > 0) {
       setActiveSectionIndex(activeSectionIndex - 1);
-    }
-  };
-
-  const handleGeneratePodcast = async () => {
-    setIsGeneratingPodcast(true);
-    try {
-      const fullText = currentSection ? (currentSection.blocks || []).map(b => b.content).join("\n") : note.title;
-      const dialogue = await generatePodcastScript(note.title, currentSection?.title || note.subject, fullText);
-      setPodcastDialogue(dialogue);
-    } catch (err: any) {
-      alert("Failed to generate podcast script: " + err.message);
-    } finally {
-      setIsGeneratingPodcast(false);
     }
   };
 
@@ -265,62 +246,7 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
         </div>
       ) : activeTab === "podcast" ? (
         /* AI PODCAST MODE */
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-            <div>
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
-                <Radio className="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
-                <span>AI Conversational Podcast Script</span>
-              </h2>
-              <p className="text-xs text-zinc-500">
-                Transforms section content into an engaging dialogue between a host and expert.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGeneratePodcast}
-              disabled={isGeneratingPodcast}
-              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-bold flex items-center space-x-2 shadow-sm disabled:opacity-50"
-            >
-              {isGeneratingPodcast ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              <span>{podcastDialogue ? "Regenerate Podcast" : "Generate Podcast Script"}</span>
-            </button>
-          </div>
-
-          {/* Dialogue Transcript */}
-          {podcastDialogue ? (
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-              {podcastDialogue.map((d, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 space-y-1"
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider block text-zinc-500">
-                    {d.speaker}
-                  </span>
-                  <p className="text-xs text-zinc-900 dark:text-zinc-100 leading-relaxed">{d.text}</p>
-                </div>
-              ))}
-
-              <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={isPlaying ? handlePause : handlePlay}
-                  className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-2 shadow-sm"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  <span>{isPlaying ? "Pause Dialogue" : "Listen to Podcast"}</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="py-12 text-center text-zinc-500 text-xs space-y-2">
-              <Radio className="w-10 h-10 text-zinc-400 mx-auto opacity-40" />
-              <p>Click "Generate Podcast Script" to transform this topic into an audio discussion!</p>
-            </div>
-          )}
-        </div>
+        <PodcastPlayer note={note} />
       ) : (
         /* STANDARD PLAYER */
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-6 shadow-sm">

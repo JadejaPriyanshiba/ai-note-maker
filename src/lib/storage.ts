@@ -16,6 +16,7 @@ import {
   LearningSession,
   SavedLearningResource,
   RevisionPlan,
+  PodcastEpisode,
 } from "../types";
 import { auth } from "./firebase";
 import {
@@ -66,6 +67,9 @@ import {
   fetchUserRevisionResourcesFromCloud,
   saveRevisionResourceToCloud,
   deleteRevisionResourceFromCloud,
+  fetchUserPodcastsFromCloud,
+  savePodcastToCloud,
+  deletePodcastFromCloud,
 } from "./syncService";
 
 const NOTES_STORAGE_KEY = "ainotemaker_user_notes_v1";
@@ -82,6 +86,7 @@ const FLASHCARDS_KEY = "ainotemaker_cards_v1";
 const LEARNING_TREES_KEY = "ainotemaker_learning_trees_v1";
 const LEARNING_SESSIONS_KEY = "ainotemaker_learning_sessions_v1";
 const SAVED_LEARNING_RESOURCES_KEY = "ainotemaker_saved_learning_resources_v1";
+const PODCASTS_STORAGE_KEY = "ainotemaker_podcasts_v1";
 
 // Seed IDs to filter out if present in existing local storage
 const SEED_COLLECTION_IDS = ["col_sem1", "col_cn", "col_unit1"];
@@ -226,6 +231,10 @@ export async function migrateLocalDataToCloud(userId: string): Promise<Migration
       failed
     );
 
+    const podcasts = getPodcastEpisodes();
+    total += podcasts.length;
+    uploaded += await uploadBatch(podcasts, "Podcast Episode", (p) => p.noteTitle, savePodcastToCloud, userId, failed);
+
     localStorage.setItem(`ainotemaker_migrated_${userId}`, "true");
     return { success: failed.length === 0, uploaded, total, failed };
   } catch (e) {
@@ -259,6 +268,7 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
       cloudSavedLearningResources,
       cloudTeachBackEvals,
       cloudRevisionResources,
+      cloudPodcasts,
     ] = await Promise.all([
       fetchUserNotesFromCloud(userId),
       fetchUserCollectionsFromCloud(userId),
@@ -275,6 +285,7 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
       fetchUserSavedLearningResourcesFromCloud(userId),
       fetchUserTeachBackEvaluationsFromCloud(userId),
       fetchUserRevisionResourcesFromCloud(userId),
+      fetchUserPodcastsFromCloud(userId),
     ]);
 
     if (cloudNotes.length > 0) {
@@ -322,6 +333,9 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
     if (cloudRevisionResources.length > 0) {
       localStorage.setItem(REVISIONS_STORAGE_KEY, JSON.stringify(cloudRevisionResources));
     }
+    if (cloudPodcasts.length > 0) {
+      localStorage.setItem(PODCASTS_STORAGE_KEY, JSON.stringify(cloudPodcasts));
+    }
 
     return {
       success: true,
@@ -337,6 +351,7 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
         "Saved Videos": cloudSavedLearningResources.length,
         "Teach-Back Evaluations": cloudTeachBackEvals.length,
         "Revision Guides": cloudRevisionResources.length,
+        "Podcast Episodes": cloudPodcasts.length,
       },
     };
   } catch (err) {
@@ -376,6 +391,7 @@ export function clearAllLocalWebCache(): void {
     localStorage.removeItem("ainotemaker_liked_resources");
     localStorage.removeItem("ainotemaker_saved_hubs_set");
     localStorage.removeItem("ainotemaker_revision_guides_v1");
+    localStorage.removeItem(PODCASTS_STORAGE_KEY);
   } catch (e) {
     console.error("Error clearing local web cache:", e);
   }
@@ -439,6 +455,12 @@ export function deleteNote(id: string): void {
   // Remove associated saved tests for this note
   const tests = getSavedTestsList().filter((t) => t.noteId !== id && t.config?.noteId !== id);
   localStorage.setItem(SAVED_TESTS_STORAGE_KEY, JSON.stringify(tests));
+
+  // Remove the saved podcast episode generated from this note, if any
+  const podcast = getPodcastForNote(id);
+  if (podcast) {
+    deletePodcastEpisode(podcast.id);
+  }
 }
 
 // Community Notes
@@ -1437,6 +1459,53 @@ export function deleteRevisionResource(id: string): void {
   const uid = getCurrentUserId();
   if (uid) {
     deleteRevisionResourceFromCloud(id);
+  }
+}
+
+// AI Podcast Episodes — one saved episode per note, so a generated podcast survives navigation,
+// reload, and signs in on another device instead of living only in AudioLearningView's state.
+export function getPodcastEpisodes(): PodcastEpisode[] {
+  try {
+    const raw = localStorage.getItem(PODCASTS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function getPodcastForNote(noteId: string): PodcastEpisode | null {
+  return getPodcastEpisodes().find((p) => p.noteId === noteId) || null;
+}
+
+export function savePodcastEpisode(episode: PodcastEpisode): PodcastEpisode {
+  const items = getPodcastEpisodes();
+  const saved: PodcastEpisode = {
+    ...episode,
+    ownerId: episode.ownerId || getCurrentUserId() || "user_local_1",
+    updatedAt: new Date().toISOString(),
+  };
+  const idx = items.findIndex((p) => p.id === saved.id);
+  if (idx >= 0) {
+    items[idx] = saved;
+  } else {
+    items.unshift(saved);
+  }
+  localStorage.setItem(PODCASTS_STORAGE_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    savePodcastToCloud(saved, uid);
+  }
+  return saved;
+}
+
+export function deletePodcastEpisode(id: string): void {
+  const items = getPodcastEpisodes().filter((p) => p.id !== id);
+  localStorage.setItem(PODCASTS_STORAGE_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    deletePodcastFromCloud(id);
   }
 }
 

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import {
   BookOpen,
   Sparkles,
@@ -27,6 +28,41 @@ interface HeaderProps {
   onToggleTheme: () => void;
   onOpenAuthModal: () => void;
 }
+
+const NAV_TABS: {
+  id: string;
+  tab: string;
+  label: string;
+  icon: React.ElementType;
+  isActive: (activeTab: string) => boolean;
+}[] = [
+  { id: "nav-tab-home", tab: "home", label: "Create", icon: Sparkles, isActive: (t) => t === "home" },
+  { id: "nav-tab-collections", tab: "collections", label: "Collections", icon: FolderTree, isActive: (t) => t === "collections" },
+  {
+    id: "nav-tab-notes",
+    tab: "my_notes",
+    label: "Notes",
+    icon: FolderKanban,
+    isActive: (t) => t === "notes_list" || t === "my_notes",
+  },
+  {
+    id: "nav-tab-flashcards",
+    tab: "flashcards",
+    label: "Flashcards",
+    icon: Layers,
+    isActive: (t) => t === "flashcards" || t === "flashcard_editor" || t === "flashcard_study",
+  },
+  {
+    id: "nav-tab-shorts",
+    tab: "shorts_learning",
+    label: "Shorts Learning",
+    icon: Film,
+    isActive: (t) => t === "shorts_setup" || t === "shorts_map" || t === "shorts_feed",
+  },
+  { id: "nav-tab-community", tab: "community", label: "Community", icon: Globe, isActive: (t) => t === "community" },
+  { id: "nav-tab-teachback", tab: "teach_back", label: "Teach Back", icon: GraduationCap, isActive: (t) => t === "teach_back" },
+  { id: "nav-tab-settings", tab: "settings", label: "Settings", icon: Settings, isActive: (t) => t === "settings" },
+];
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
@@ -69,111 +105,31 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Center Navigation Links */}
         <nav className="hidden md:flex items-center space-x-1">
-          <button
-            id="nav-tab-home"
-            onClick={() => onSelectTab("home")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "home"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Create</span>
-          </button>
-
-          <button
-            id="nav-tab-collections"
-            onClick={() => onSelectTab("collections")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "collections"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <FolderTree className="w-3.5 h-3.5" />
-            <span>Collections</span>
-          </button>
-
-          <button
-            id="nav-tab-notes"
-            onClick={() => onSelectTab("my_notes")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "notes_list" || activeTab === "my_notes"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <FolderKanban className="w-3.5 h-3.5" />
-            <span>Notes</span>
-          </button>
-
-          <button
-            id="nav-tab-flashcards"
-            onClick={() => onSelectTab("flashcards")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "flashcards" ||
-              activeTab === "flashcard_editor" ||
-              activeTab === "flashcard_study"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Flashcards</span>
-          </button>
-
-          <button
-            id="nav-tab-shorts"
-            onClick={() => onSelectTab("shorts_learning")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "shorts_setup" || activeTab === "shorts_map" || activeTab === "shorts_feed"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <Film className="w-3.5 h-3.5" />
-            <span>Shorts Learning</span>
-          </button>
-
-          <button
-            id="nav-tab-community"
-            onClick={() => onSelectTab("community")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "community"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Community</span>
-          </button>
-
-          <button
-            id="nav-tab-teachback"
-            onClick={() => onSelectTab("teach_back")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "teach_back"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>Teach Back</span>
-          </button>
-
-          <button
-            id="nav-tab-settings"
-            onClick={() => onSelectTab("settings")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 ${
-              activeTab === "settings"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Settings</span>
-          </button>
+          {NAV_TABS.map(({ id, tab, label, icon: Icon, isActive }) => {
+            const active = isActive(activeTab);
+            return (
+              <button
+                key={id}
+                id={id}
+                onClick={() => onSelectTab(tab)}
+                className={`relative px-3 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1.5 ${
+                  active
+                    ? "text-white dark:text-zinc-900 font-bold"
+                    : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+                }`}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="nav-active-tab"
+                    className="absolute inset-0 rounded-lg bg-zinc-900 dark:bg-zinc-100"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Icon className="w-3.5 h-3.5 relative z-10" />
+                <span className="relative z-10">{label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Right Utility Badge & Controls */}

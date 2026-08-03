@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { CloudUpload, HardDrive, ShieldCheck, Check, AlertCircle } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { migrateLocalDataToCloud } from "../../lib/storage";
+import { Modal } from "../Modal";
 
 interface DataMigrationModalProps {
   isOpen: boolean;
@@ -19,18 +20,7 @@ export const DataMigrationModal: React.FC<DataMigrationModalProps> = ({
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
-
-  if (!isOpen || !user) return null;
+  if (!user) return null;
 
   const handleUploadToAccount = async () => {
     setMigrating(true);
@@ -73,14 +63,7 @@ export const DataMigrationModal: React.FC<DataMigrationModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl max-w-md w-full p-6 space-y-5 text-left my-auto max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-md p-6 space-y-5 text-left">
         <div className="flex items-center space-x-3 text-amber-500">
           <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/50">
             <CloudUpload className="w-6 h-6" />
@@ -134,7 +117,6 @@ export const DataMigrationModal: React.FC<DataMigrationModalProps> = ({
             <span>Keep Local Cache Only</span>
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

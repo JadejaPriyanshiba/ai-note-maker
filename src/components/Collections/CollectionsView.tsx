@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { motion } from "motion/react";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
 import {
   Folder,
   FolderPlus,
@@ -40,6 +42,8 @@ import {
 import { CollectionSelectorModal } from "./CollectionSelectorModal";
 import { PublishModal } from "../Community/PublishModal";
 import { ConfirmModal } from "../ConfirmModal";
+import { Modal } from "../Modal";
+import { EmptyState } from "../EmptyState";
 
 interface CollectionsViewProps {
   onOpenNoteStudio: (note: NoteDocument) => void;
@@ -502,9 +506,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               searchResultsNotes.length === 0 &&
               searchResultsDecks.length === 0 &&
               searchResultsTests.length === 0 ? (
-                <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs">
-                  No matching collections or resources found.
-                </div>
+                <EmptyState message="No matching collections or resources found." />
               ) : (
                 <div className="space-y-4">
                   {/* Matching Folders */}
@@ -519,7 +521,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                               setCurrentCollectionId(c.id);
                               setSearchQuery("");
                             }}
-                            className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex items-center justify-between"
+                            className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex items-center justify-between"
                           >
                             <div className="flex items-center space-x-3">
                               <Folder className="w-5 h-5 text-zinc-600 dark:text-zinc-300 shrink-0" />
@@ -546,7 +548,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                             <div
                               key={note.id}
                               onClick={() => onOpenNoteStudio(note)}
-                              className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-400 transition-all cursor-pointer space-y-2"
+                              className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer space-y-2"
                             >
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-bold text-zinc-500 uppercase">{note.subject}</span>
@@ -574,7 +576,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                             <div
                               key={deck.id}
                               onClick={() => onOpenFlashcardDeck(deck)}
-                              className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-400 transition-all cursor-pointer space-y-2"
+                              className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer space-y-2"
                             >
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-bold text-zinc-500 uppercase">{deck.subject}</span>
@@ -668,17 +670,21 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                 </div>
 
                 {currentChildCols.length === 0 ? (
-                  <div className="p-6 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 text-xs">
-                    No sub-folders inside this directory.
-                  </div>
+                  <EmptyState message="No sub-folders inside this directory." />
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <motion.div
+                    variants={staggerContainer()}
+                    initial="hidden"
+                    animate="show"
+                    className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"
+                  >
                     {currentChildCols.map((childCol) => {
                       const childNotes = notes.filter((n) => n.collectionId === childCol.id);
                       const childDecks = decks.filter((d) => d.collectionId === childCol.id);
                       return (
-                        <div
+                        <motion.div
                           key={childCol.id}
+                          variants={fadeInUp}
                           onClick={() => setCurrentCollectionId(childCol.id)}
                           className="group relative bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex flex-col justify-between space-y-3"
                         >
@@ -716,10 +722,10 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                             <span>{childNotes.length} Notes • {childDecks.length} Decks</span>
                             <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
                           </div>
-                        </div>
+                        </motion.div>
                       );
                     })}
-                  </div>
+                  </motion.div>
                 )}
               </div>
 
@@ -731,17 +737,20 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                 </h3>
 
                 {currentNotes.length === 0 && currentDecks.length === 0 && currentTests.length === 0 ? (
-                  <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 space-y-2">
-                    <p className="text-xs text-zinc-500">No resources saved directly in this folder yet.</p>
-                    <p className="text-[11px] text-zinc-400">Use the buttons above to create notes, flashcards, or practice tests here.</p>
-                  </div>
+                  <EmptyState message="No resources saved directly in this folder yet. Use the buttons above to create notes, flashcards, or practice tests here." />
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <motion.div
+                    variants={staggerContainer()}
+                    initial="hidden"
+                    animate="show"
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                  >
                     {/* Notes in folder */}
                     {currentNotes.map((note) => (
-                      <div
+                      <motion.div
                         key={note.id}
-                        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-3"
+                        variants={fadeInUp}
+                        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-3"
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -781,14 +790,15 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                             Open Note
                           </button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
 
                     {/* Decks in folder */}
                     {currentDecks.map((deck) => (
-                      <div
+                      <motion.div
                         key={deck.id}
-                        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-3"
+                        variants={fadeInUp}
+                        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-3"
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -834,14 +844,15 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                             Study Deck
                           </button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
 
                     {/* Tests in folder */}
                     {currentTests.map((test) => (
-                      <div
+                      <motion.div
                         key={test.id}
-                        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-3"
+                        variants={fadeInUp}
+                        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all flex flex-col justify-between space-y-3"
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -881,9 +892,9 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                             Take Test
                           </button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
-                  </div>
+                  </motion.div>
                 )}
               </div>
             </div>
@@ -892,11 +903,10 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       </div>
 
       {/* CREATE / EDIT COLLECTION MODAL */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-zinc-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} panelClassName="max-w-md">
           <form
             onSubmit={handleSaveCollectionForm}
-            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4"
+            className="p-6 space-y-4"
           >
             <h3 className="text-base font-bold text-zinc-900 dark:text-white">
               {editingCol ? "Rename / Edit Folder" : "Create New Study Folder"}
@@ -948,8 +958,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               </button>
             </div>
           </form>
-        </div>
-      )}
+      </Modal>
 
       {/* MOVE RESOURCE SELECTOR MODAL */}
       <CollectionSelectorModal

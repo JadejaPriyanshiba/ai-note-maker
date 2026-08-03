@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { motion } from "motion/react";
 import { Globe, Layers, Sparkles, Plus, Search, Clock, Play, Edit2, Trash2, Folder, Flame, CheckCircle2, BookOpen } from "lucide-react";
 import { FlashcardDeck, Flashcard, Collection } from "../../types";
 import {
@@ -10,6 +11,8 @@ import {
 } from "../../lib/storage";
 import { PublishModal } from "../Community/PublishModal";
 import { ConfirmModal } from "../ConfirmModal";
+import { EmptyState } from "../EmptyState";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
 
 interface FlashcardHubViewProps {
   onOpenDeckEditor: (deck: FlashcardDeck) => void;
@@ -105,7 +108,12 @@ export const FlashcardHubView: React.FC<FlashcardHubViewProps> = ({
 
       {/* Due Flashcards Reminder Alert */}
       {dueCards.length > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
           <div className="flex items-center space-x-3">
             <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/60 flex items-center justify-center text-amber-700 dark:text-amber-300 shrink-0">
               <Flame className="w-5 h-5" />
@@ -127,7 +135,7 @@ export const FlashcardHubView: React.FC<FlashcardHubViewProps> = ({
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Study Due Cards ({dueCards.length})</span>
           </button>
-        </div>
+        </motion.div>
       )}
 
       {/* Toolbar & Search */}
@@ -150,31 +158,27 @@ export const FlashcardHubView: React.FC<FlashcardHubViewProps> = ({
 
       {/* Decks Grid */}
       {filteredDecks.length === 0 ? (
-        <div className="p-12 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 space-y-3">
-          <Layers className="w-8 h-8 text-zinc-400 mx-auto" />
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-white">No flashcard decks found</h3>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            {searchQuery ? "No decks match your search query." : "Start by generating flashcards from your AI study notes or creating a deck manually."}
-          </p>
-          <div className="pt-2 flex justify-center space-x-2">
-            <button
-              onClick={() => onOpenAIGenerator()}
-              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Generate with AI</span>
-            </button>
-          </div>
-        </div>
+        <EmptyState
+          icon={Layers}
+          title="No flashcard decks found"
+          message={searchQuery ? "No decks match your search query." : "Start by generating flashcards from your AI study notes or creating a deck manually."}
+          action={{ label: "Generate with AI", onClick: () => onOpenAIGenerator() }}
+        />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <motion.div
+          variants={staggerContainer()}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
           {filteredDecks.map((deck) => {
             const collectionObj = collections.find((c) => c.id === deck.collectionId);
             return (
-              <div
+              <motion.div
                 key={deck.id}
+                variants={fadeInUp}
                 onClick={() => onOpenDeckEditor(deck)}
-                className="group bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex flex-col justify-between space-y-4"
+                className="group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-md hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
@@ -233,10 +237,10 @@ export const FlashcardHubView: React.FC<FlashcardHubViewProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       )}
 
       {/* Publish Deck Modal */}

@@ -88,6 +88,7 @@ Each top-level Firestore collection maps 1:1 to a domain entity. Ownership is en
 | `reports` | `reporterId` | No (own reports only) |
 | `learning_trees`, `learning_sessions`, `saved_learning_resources` | `userId` | No |
 | `teachback_evaluations`, `revision_resources` | `ownerId` | No |
+| `podcasts` | `ownerId` | No |
 
 ## AI request lifecycle
 

@@ -1,8 +1,12 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { WeakTopicStat, NoteDocument, FlashcardDeck } from "../../types";
 import { getWeakTopicStats, saveRevisionResource, getCollections } from "../../lib/storage";
 import { generateRevisionPlan, generateFlashcards } from "../../lib/aiService";
 import { AlertTriangle, Sparkles, Layers, Play, TrendingUp, BookOpen, CheckCircle2, RotateCcw, FileText } from "lucide-react";
+import { Modal } from "../Modal";
+import { EmptyState } from "../EmptyState";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
 
 interface WeakTopicsDashboardProps {
   onStartRetest: (subject: string, topicTitles: string[]) => void;
@@ -132,26 +136,27 @@ export const WeakTopicsDashboard: React.FC<WeakTopicsDashboardProps> = ({
 
       {/* Main Weak Topics List */}
       {weakStats.length === 0 ? (
-        <div className="py-12 text-center text-zinc-500 text-xs space-y-2 border border-dashed border-zinc-300 dark:border-zinc-800 rounded-2xl p-8">
-          <CheckCircle2 className="w-10 h-10 mx-auto text-zinc-400" />
-          <p className="font-medium text-zinc-700 dark:text-zinc-300">No weak topics recorded yet!</p>
-          <p className="font-light text-zinc-500">Take practice assessments to automatically track topic strengths and weaknesses over time.</p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="No weak topics recorded yet!"
+          message="Take practice assessments to automatically track topic strengths and weaknesses over time."
+        />
       ) : (
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
             <span>Learning Intelligence & Weakness Matrix</span>
           </h3>
 
-          <div className="space-y-3">
+          <motion.div variants={staggerContainer()} initial="hidden" animate="show" className="space-y-3">
             {weakStats.map((stat) => {
               const isWeak = stat.currentAccuracy < 60;
               const isReview = stat.currentAccuracy >= 60 && stat.currentAccuracy < 80;
 
               return (
-                <div
+                <motion.div
                   key={stat.topicId}
-                  className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  variants={fadeInUp}
+                  className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
                 >
                   <div className="space-y-1.5 max-w-xl">
                     <div className="flex items-center space-x-2">
@@ -224,17 +229,16 @@ export const WeakTopicsDashboard: React.FC<WeakTopicsDashboardProps> = ({
                       <span>Retest Topic</span>
                     </button>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* Revision Modal Guide */}
-      {revisionModalData && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto space-y-6 shadow-2xl">
+      <Modal isOpen={!!revisionModalData} onClose={() => setRevisionModalData(null)} panelClassName="max-w-2xl p-6 sm:p-8 space-y-6 shadow-2xl">
+        {revisionModalData && (<>
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
               <div className="flex items-center space-x-2">
                 <Sparkles className="w-5 h-5 text-zinc-800 dark:text-zinc-200" />
@@ -301,9 +305,8 @@ export const WeakTopicsDashboard: React.FC<WeakTopicsDashboardProps> = ({
                 Done Reviewing
               </button>
             </div>
-          </div>
-        </div>
-      )}
+        </>)}
+      </Modal>
     </div>
   );
 };

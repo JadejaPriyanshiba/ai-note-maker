@@ -258,6 +258,21 @@ export interface TeachBackEvaluation {
   createdAt: string;
 }
 
+export interface PodcastTurn {
+  speaker: string;
+  text: string;
+}
+
+export interface PodcastEpisode {
+  id: string;
+  ownerId?: string;
+  noteId: string;
+  noteTitle: string;
+  dialogue: PodcastTurn[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type CommunityResourceType = 'note' | 'flashcard_deck' | 'collection';
 
 export interface CommunityNote {
