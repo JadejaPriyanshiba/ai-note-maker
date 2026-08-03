@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import {
   NoteDocument,
   Complexity,
@@ -23,11 +24,11 @@ import {
 import { QuestionPreviewEditor } from "./QuestionPreviewEditor";
 import { WeakTopicsDashboard } from "./WeakTopicsDashboard";
 import { ConfirmModal } from "../ConfirmModal";
+import { EmptyState } from "../EmptyState";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
 import {
   Play,
-  CheckSquare,
   Clock,
-  Sliders,
   Layers,
   Trash2,
   History,
@@ -35,9 +36,7 @@ import {
   FileCheck,
   ArrowRight,
   AlertTriangle,
-  FolderTree,
-  Plus,
-  RotateCcw,
+  Loader2,
 } from "lucide-react";
 
 interface TestGeneratorProps {
@@ -50,6 +49,15 @@ interface TestGeneratorProps {
   onOpenFlashcardDeck?: (deck: FlashcardDeck) => void;
   onOpenNoteStudio?: (note: NoteDocument) => void;
 }
+
+const SOURCE_TYPE_OPTIONS: { value: "note" | "notes" | "collection" | "flashcard_deck" | "weakness" | "custom"; label: string }[] = [
+  { value: "note", label: "Single Note" },
+  { value: "notes", label: "Multi-Notes" },
+  { value: "collection", label: "Collection" },
+  { value: "flashcard_deck", label: "Flashcards" },
+  { value: "weakness", label: "Weak Topics" },
+  { value: "custom", label: "Manual" },
+];
 
 export const TestGenerator: React.FC<TestGeneratorProps> = ({
   notes,
@@ -279,7 +287,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
       setPreviewQuestions(questions);
     } catch (err: any) {
       alert("Failed to generate test questions: " + err.message);
-    } font: {
+    } finally {
       setIsGenerating(false);
       setBatchProgress(null);
     }
@@ -341,14 +349,19 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-4xl mx-auto space-y-6 shadow-sm">
+    <motion.div
+      variants={fadeInUp}
+      initial="hidden"
+      animate="show"
+      className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-4xl mx-auto space-y-6 shadow-sm"
+    >
       {/* Header & Sub-navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
             Assessment & Learning Intelligence
           </span>
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
+          <h2 className="text-2xl font-extrabold tracking-tight text-zinc-900 dark:text-white mt-0.5">
             Test Center
           </h2>
         </div>
@@ -387,7 +400,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                 : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
             }`}
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300" />
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             <span>My Weak Topics</span>
           </button>
           <button
@@ -414,72 +427,20 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
               Select Assessment Source
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setSourceType("note")}
-                className={`p-2.5 rounded-xl border text-center transition-all ${
-                  sourceType === "note"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                Single Note
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType("notes")}
-                className={`p-2.5 rounded-xl border text-center transition-all ${
-                  sourceType === "notes"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                Multi-Notes
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType("collection")}
-                className={`p-2.5 rounded-xl border text-center transition-all ${
-                  sourceType === "collection"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                Collection
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType("flashcard_deck")}
-                className={`p-2.5 rounded-xl border text-center transition-all ${
-                  sourceType === "flashcard_deck"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                Flashcards
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType("weakness")}
-                className={`p-2.5 rounded-xl border text-center transition-all ${
-                  sourceType === "weakness"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                Weak Topics
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType("custom")}
-                className={`p-2.5 rounded-xl border text-center transition-all ${
-                  sourceType === "custom"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                Manual
-              </button>
+              {SOURCE_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSourceType(opt.value)}
+                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                    sourceType === opt.value
+                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
+                      : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -496,7 +457,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                   const found = notes.find((n) => n.id === e.target.value);
                   if (found) setSelectedTopicIds((found.roadmap || []).map((t) => t.id));
                 }}
-                className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium"
+                className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
               >
                 {notes.map((n) => (
                   <option key={n.id} value={n.id}>
@@ -523,10 +484,10 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                     {(activeNote.roadmap || []).map((t) => (
                       <label
                         key={t.id}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center space-x-2 cursor-pointer ${
+                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center space-x-2 cursor-pointer transition-colors ${
                           selectedTopicIds.includes(t.id)
-                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                            : "bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
+                            : "bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                         }`}
                       >
                         <input
@@ -553,10 +514,10 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                 {notes.map((n) => (
                   <label
                     key={n.id}
-                    className={`p-2.5 rounded-xl border text-xs font-medium flex items-center space-x-2 cursor-pointer ${
+                    className={`p-2.5 rounded-xl border text-xs font-medium flex items-center space-x-2 cursor-pointer transition-colors ${
                       selectedNoteIds.includes(n.id)
-                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900"
-                        : "bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
+                        : "bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     }`}
                   >
                     <input
@@ -581,7 +542,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                 <select
                   value={selectedCollectionId}
                   onChange={(e) => setSelectedCollectionId(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium"
+                  className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                 >
                   {collections.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -611,7 +572,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
               <select
                 value={selectedDeckId}
                 onChange={(e) => setSelectedDeckId(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium"
+                className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
               >
                 {flashcardDecks.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -623,12 +584,12 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
           )}
 
           {sourceType === "weakness" && (
-            <div className="p-4 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs space-y-2 border border-zinc-300 dark:border-zinc-700">
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs space-y-2 border border-amber-200 dark:border-amber-900/50">
               <div className="flex items-center space-x-2 font-bold">
-                <AlertTriangle className="w-4 h-4 text-zinc-800 dark:text-zinc-200" />
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                 <span>Targeted Weak Topics Retest</span>
               </div>
-              <p className="font-light">
+              <p>
                 Questions will be automatically generated exclusively from topics where your recent accuracy was under 60%.
               </p>
             </div>
@@ -644,7 +605,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                 <select
                   value={questionCount}
                   onChange={(e) => setQuestionCount(Number(e.target.value))}
-                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs"
+                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                 >
                   <option value={5}>5 Questions</option>
                   <option value={10}>10 Questions (Standard Batch)</option>
@@ -661,7 +622,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                 <select
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value as Complexity)}
-                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs"
+                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                 >
                   <option value="Beginner">Beginner</option>
                   <option value="Easy">Easy</option>
@@ -678,7 +639,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                 <select
                   value={timeLimitMinutes}
                   onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
-                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs"
+                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                 >
                   <option value={5}>5 Minutes</option>
                   <option value={10}>10 Minutes</option>
@@ -694,7 +655,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
           {isGenerating && batchProgress && (
             <div className="p-4 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-semibold flex items-center justify-between shadow-md">
               <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Generating questions batch {batchProgress.current} of {batchProgress.total}...</span>
               </div>
               <span>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
@@ -709,7 +670,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
               disabled={isGenerating}
               className="px-6 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4 fill-current" />
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 fill-current" />}
               <span>
                 {sourceType === "custom"
                   ? "Open Manual Question Builder"
@@ -726,15 +687,13 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
       {activeTab === "saved" && (
         <div className="space-y-4">
           {savedTests.length === 0 ? (
-            <div className="py-12 text-center text-zinc-500 text-xs space-y-2">
-              <FileCheck className="w-10 h-10 mx-auto opacity-40 text-zinc-400" />
-              <p>No saved tests yet. Generate a test to save it!</p>
-            </div>
+            <EmptyState icon={FileCheck} message="No saved tests yet. Generate a test to save it!" />
           ) : (
-            <div className="grid grid-cols-1 gap-3">
+            <motion.div variants={staggerContainer()} initial="hidden" animate="show" className="grid grid-cols-1 gap-3">
               {savedTests.map((test) => (
-                <div
+                <motion.div
                   key={test.id}
+                  variants={fadeInUp}
                   className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1">
@@ -750,7 +709,13 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                       {test.questions.length} Questions • {test.config.timeLimitMinutes} mins limit • Created {new Date(test.createdAt).toLocaleDateString()}
                     </p>
                     {test.lastPercentage !== undefined && (
-                      <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                      <p
+                        className={`text-[11px] font-semibold ${
+                          test.lastPercentage >= 70
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-amber-700 dark:text-amber-400"
+                        }`}
+                      >
                         Last Score: {test.lastScore} / {test.questions.length} ({test.lastPercentage}%) • {test.attemptsCount || 1} attempts
                       </p>
                     )}
@@ -760,7 +725,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                     <button
                       type="button"
                       onClick={() => onStartTest(test.config, test.questions)}
-                      className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 shadow-sm"
+                      className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-colors"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                       <span>{test.lastPercentage !== undefined ? "Retake Test" : "Start Test"}</span>
@@ -768,15 +733,15 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDeleteSavedTest(test)}
-                      className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400"
+                      className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors"
                       title="Delete Test"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       )}
@@ -794,15 +759,13 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
       {activeTab === "history" && (
         <div className="space-y-4">
           {attemptHistory.length === 0 ? (
-            <div className="py-12 text-center text-zinc-500 text-xs space-y-2">
-              <History className="w-10 h-10 mx-auto opacity-40 text-zinc-400" />
-              <p>No test attempts completed yet. Take an assessment to view score trends!</p>
-            </div>
+            <EmptyState icon={History} message="No test attempts completed yet. Take an assessment to view score trends!" />
           ) : (
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+            <motion.div variants={staggerContainer()} initial="hidden" animate="show" className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
               {attemptHistory.map((att) => (
-                <div
+                <motion.div
                   key={att.id}
+                  variants={fadeInUp}
                   className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1">
@@ -816,7 +779,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                     </div>
                     <div className="flex items-center space-x-3 text-xs text-zinc-600 dark:text-zinc-400">
                       <span>Score: <strong className="text-zinc-900 dark:text-zinc-100">{att.score} / {att.total}</strong> ({att.percentage}%)</span>
-                      <span>Time: <strong>{Math.round(att.timeSpentSeconds / 60)} mins</strong></span>
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {Math.round(att.timeSpentSeconds / 60)} mins</span>
                     </div>
                   </div>
 
@@ -824,8 +787,8 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                     <span
                       className={`px-3 py-1 rounded-lg text-xs font-bold ${
                         att.percentage >= 70
-                          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                          : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                          ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300"
+                          : "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300"
                       }`}
                     >
                       {att.percentage}% Accuracy
@@ -834,7 +797,7 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                       <button
                         type="button"
                         onClick={() => onViewAttemptResults(att)}
-                        className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1"
+                        className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1 transition-colors"
                       >
                         <span>Details</span>
                         <ArrowRight className="w-3.5 h-3.5" />
@@ -843,15 +806,15 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDeleteTestAttempt(att.id)}
-                      className="p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400"
+                      className="p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors"
                       title="Delete Attempt Record"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       )}
@@ -875,6 +838,6 @@ export const TestGenerator: React.FC<TestGeneratorProps> = ({
         onConfirm={confirmDeleteTestAttempt}
         onClose={() => setAttemptToDeleteId(null)}
       />
-    </div>
+    </motion.div>
   );
 };

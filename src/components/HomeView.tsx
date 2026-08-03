@@ -147,11 +147,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         animate="show"
         className="relative overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-5 sm:px-12 py-10 sm:py-16 shadow-sm"
       >
-        {/* Decorative ambient gradient blobs — purely cosmetic, layered behind content */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-24 -right-16 w-72 h-72 rounded-full bg-emerald-200/40 dark:bg-emerald-500/10 blur-3xl"
-        />
+        {/* Decorative ambient gradient blob — purely cosmetic, layered behind content */}
         <div
           aria-hidden
           className="pointer-events-none absolute -bottom-32 -left-20 w-80 h-80 rounded-full bg-zinc-200/70 dark:bg-zinc-700/20 blur-3xl"

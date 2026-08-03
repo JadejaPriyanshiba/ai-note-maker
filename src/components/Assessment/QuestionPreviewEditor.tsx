@@ -1,7 +1,10 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { Question, QuestionType, TestConfig } from "../../types";
 import { generateTestQuestions } from "../../lib/aiService";
-import { Edit2, Trash2, ArrowUp, ArrowDown, Sparkles, Plus, Check, Play, Save, FileText, X } from "lucide-react";
+import { Edit2, Trash2, ArrowUp, ArrowDown, ArrowLeft, Sparkles, Plus, Check, Play, Save, Loader2 } from "lucide-react";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
+import { Modal } from "../Modal";
 
 interface QuestionPreviewEditorProps {
   initialQuestions: Question[];
@@ -123,30 +126,36 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-4xl mx-auto space-y-6 shadow-sm">
+    <motion.div
+      variants={fadeInUp}
+      initial="hidden"
+      animate="show"
+      className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 max-w-4xl mx-auto space-y-6 shadow-sm"
+    >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
             Assessment Preview & Customization
           </span>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
+          <h2 className="text-xl font-extrabold tracking-tight text-zinc-900 dark:text-white mt-0.5">
             Review Questions ({questions.length})
           </h2>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2">
           <button
             type="button"
             onClick={onBack}
-            className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1.5 transition-colors"
           >
-            ← Back
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back</span>
           </button>
           <button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold flex items-center space-x-1.5"
+            className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold flex items-center space-x-1.5 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Add Question</span>
@@ -154,7 +163,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
           <button
             type="button"
             onClick={() => onSaveTest(questions)}
-            className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-1.5 shadow-sm"
+            className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-1.5 shadow-sm transition-colors"
           >
             <Save className="w-4 h-4" />
             <span>Save Test</span>
@@ -162,7 +171,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
           <button
             type="button"
             onClick={() => onStartTest(questions)}
-            className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-1.5 shadow-sm"
+            className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-1.5 shadow-sm transition-colors"
           >
             <Play className="w-4 h-4 fill-current" />
             <span>Start Test Now</span>
@@ -171,7 +180,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
       </div>
 
       {/* Questions List */}
-      <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+      <motion.div variants={staggerContainer(0.03)} initial="hidden" animate="show" className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
         {questions.map((q, idx) => {
           const isEditing = editingQuestionId === q.id;
 
@@ -213,7 +222,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                       onChange={(e) =>
                         setEditingQuestion({ ...editingQuestion, topicTitle: e.target.value })
                       }
-                      className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                      className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                     />
                   </div>
 
@@ -225,7 +234,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                       onChange={(e) =>
                         setEditingQuestion({ ...editingQuestion, question: e.target.value })
                       }
-                      className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                      className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                     />
                   </div>
 
@@ -242,7 +251,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                             newOpts[oIdx] = e.target.value;
                             setEditingQuestion({ ...editingQuestion, options: newOpts });
                           }}
-                          className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                          className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                         />
                       ))}
                     </div>
@@ -256,7 +265,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                       onChange={(e) =>
                         setEditingQuestion({ ...editingQuestion, correctAnswer: e.target.value })
                       }
-                      className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                      className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                     />
                   </div>
 
@@ -268,7 +277,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                       onChange={(e) =>
                         setEditingQuestion({ ...editingQuestion, explanation: e.target.value })
                       }
-                      className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                      className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                     />
                   </div>
                 </div>
@@ -277,8 +286,9 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
           }
 
           return (
-            <div
+            <motion.div
               key={q.id}
+              variants={fadeInUp}
               className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 space-y-3"
             >
               <div className="flex items-center justify-between text-xs">
@@ -314,16 +324,20 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                     type="button"
                     onClick={() => handleRegenerateSingle(q)}
                     disabled={regeneratingId === q.id}
-                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
                     title="Regenerate Question using AI"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
+                    {regeneratingId === q.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleStartEdit(q)}
-                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
                     title="Edit Question"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -332,7 +346,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                   <button
                     type="button"
                     onClick={() => handleDelete(q.id)}
-                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400"
+                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors"
                     title="Delete Question"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -351,7 +365,7 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                       key={oIdx}
                       className={`p-2 rounded-xl border text-xs ${
                         opt === q.correctAnswer || q.correctAnswer.startsWith(opt)
-                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 font-bold"
+                          ? "bg-emerald-600 text-white border-emerald-600 font-bold"
                           : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
                       }`}
                     >
@@ -362,9 +376,9 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
               )}
 
               {q.type !== "mcq" && (
-                <div className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs">
-                  <span className="font-bold text-zinc-500 uppercase text-[10px]">Correct Answer:</span>{" "}
-                  <span className="font-bold text-zinc-900 dark:text-zinc-100">{q.correctAnswer}</span>
+                <div className="p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 text-xs">
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400 uppercase text-[10px]">Correct Answer:</span>{" "}
+                  <span className="font-bold text-emerald-900 dark:text-emerald-200">{q.correctAnswer}</span>
                 </div>
               )}
 
@@ -373,125 +387,116 @@ export const QuestionPreviewEditor: React.FC<QuestionPreviewEditorProps> = ({
                   Explanation: {q.explanation}
                 </p>
               )}
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Add Manual Question Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
-              <h3 className="font-bold text-base">Add Custom Question</h3>
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} panelClassName="max-w-lg">
+        <div className="p-6 sm:p-8 space-y-4">
+          <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+            Add Custom Question
+          </h3>
+
+          <div className="space-y-3 text-xs">
+            <div>
+              <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Question Type</label>
+              <select
+                value={newType}
+                onChange={(e) => setNewType(e.target.value as QuestionType)}
+                className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
               >
-                <X className="w-5 h-5" />
-              </button>
+                <option value="mcq">Multiple Choice (MCQ)</option>
+                <option value="true_false">True / False</option>
+                <option value="fill_blank">Fill in the Blank</option>
+                <option value="one_word">One Word</option>
+              </select>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Question Type</label>
-                <select
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value as QuestionType)}
-                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                >
-                  <option value="mcq">Multiple Choice (MCQ)</option>
-                  <option value="true_false">True / False</option>
-                  <option value="fill_blank">Fill in the Blank</option>
-                  <option value="one_word">One Word</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Topic Name</label>
-                <input
-                  type="text"
-                  value={newTopicTitle}
-                  onChange={(e) => setNewTopicTitle(e.target.value)}
-                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Question Prompt</label>
-                <textarea
-                  rows={2}
-                  value={newText}
-                  onChange={(e) => setNewText(e.target.value)}
-                  placeholder="e.g. Which protocol operates at the Transport layer?"
-                  className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              {newType === "mcq" && (
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-zinc-700 dark:text-zinc-300">MCQ Options</label>
-                  {newOptions.map((opt, idx) => (
-                    <input
-                      key={idx}
-                      type="text"
-                      value={opt}
-                      onChange={(e) => {
-                        const copy = [...newOptions];
-                        copy[idx] = e.target.value;
-                        setNewOptions(copy);
-                      }}
-                      className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                    />
-                  ))}
-                </div>
-              )}
-
-              <div>
-                <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Correct Answer {newType === "mcq" ? "(e.g. Option A or full text)" : newType === "true_false" ? "(True or False)" : ""}
-                </label>
-                <input
-                  type="text"
-                  value={newAnswer}
-                  onChange={(e) => setNewAnswer(e.target.value)}
-                  placeholder="Enter exact correct answer..."
-                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Explanation</label>
-                <textarea
-                  rows={2}
-                  value={newExplanation}
-                  onChange={(e) => setNewExplanation(e.target.value)}
-                  placeholder="Reason why this answer is correct..."
-                  className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
+            <div>
+              <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Topic Name</label>
+              <input
+                type="text"
+                value={newTopicTitle}
+                onChange={(e) => setNewTopicTitle(e.target.value)}
+                className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+              />
             </div>
 
-            <div className="flex justify-end space-x-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddManualQuestion}
-                className="px-5 py-2 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs"
-              >
-                Add Question
-              </button>
+            <div>
+              <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Question Prompt</label>
+              <textarea
+                rows={2}
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                placeholder="e.g. Which protocol operates at the Transport layer?"
+                className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+              />
+            </div>
+
+            {newType === "mcq" && (
+              <div className="space-y-1.5">
+                <label className="block font-bold text-zinc-700 dark:text-zinc-300">MCQ Options</label>
+                {newOptions.map((opt, idx) => (
+                  <input
+                    key={idx}
+                    type="text"
+                    value={opt}
+                    onChange={(e) => {
+                      const copy = [...newOptions];
+                      copy[idx] = e.target.value;
+                      setNewOptions(copy);
+                    }}
+                    className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                  />
+                ))}
+              </div>
+            )}
+
+            <div>
+              <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                Correct Answer {newType === "mcq" ? "(e.g. Option A or full text)" : newType === "true_false" ? "(True or False)" : ""}
+              </label>
+              <input
+                type="text"
+                value={newAnswer}
+                onChange={(e) => setNewAnswer(e.target.value)}
+                placeholder="Enter exact correct answer..."
+                className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-zinc-700 dark:text-zinc-300 mb-1">Explanation</label>
+              <textarea
+                rows={2}
+                value={newExplanation}
+                onChange={(e) => setNewExplanation(e.target.value)}
+                placeholder="Reason why this answer is correct..."
+                className="w-full p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+              />
             </div>
           </div>
+
+          <div className="flex justify-end space-x-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleAddManualQuestion}
+              className="px-5 py-2 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+            >
+              Add Question
+            </button>
+          </div>
         </div>
-      )}
-    </div>
+      </Modal>
+    </motion.div>
   );
 };

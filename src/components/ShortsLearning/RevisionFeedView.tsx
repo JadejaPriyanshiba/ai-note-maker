@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { X, List, GraduationCap, BookOpenCheck } from "lucide-react";
 import { LearningContent, SavedLearningResource } from "../../types";
 import { saveSavedLearningResource } from "../../lib/storage";
@@ -102,7 +103,7 @@ export const RevisionFeedView: React.FC<RevisionFeedViewProps> = ({ resources, t
     return (
       <div className="max-w-md mx-auto py-20 text-center space-y-3 px-4">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">No saved videos to review yet.</p>
-        <button onClick={onExit} className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium">
+        <button onClick={onExit} className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors">
           Back
         </button>
       </div>
@@ -149,13 +150,13 @@ export const RevisionFeedView: React.FC<RevisionFeedViewProps> = ({ resources, t
         {/* Final section: end of review */}
         <div className="h-[100dvh] w-full snap-start snap-always relative bg-zinc-950 flex flex-col items-center justify-center text-white text-center px-8 space-y-4">
           <BookOpenCheck className="w-9 h-9 text-white/80" />
-          <h2 className="text-lg font-semibold">You've reviewed everything saved</h2>
+          <h2 className="text-lg font-bold">You've reviewed everything saved</h2>
           <p className="text-xs text-white/60">{items.length} saved video{items.length === 1 ? "" : "s"} from "{title}".</p>
           <div className="flex flex-col gap-2 w-full max-w-xs pt-2">
             {onTestMe && distinctTopics.length >= TEST_ME_THRESHOLD && (
               <button
                 onClick={() => onTestMe(distinctTopics)}
-                className="px-4 py-2.5 rounded-xl bg-white text-zinc-900 text-xs font-medium flex items-center justify-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-white text-zinc-900 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-zinc-100 transition-colors"
               >
                 <GraduationCap className="w-3.5 h-3.5" />
                 <span>Test Me on {distinctTopics.length} Topics</span>
@@ -163,11 +164,11 @@ export const RevisionFeedView: React.FC<RevisionFeedViewProps> = ({ resources, t
             )}
             <button
               onClick={() => scrollToIndex(0)}
-              className="px-4 py-2.5 rounded-xl border border-white/25 text-white text-xs font-medium hover:bg-white/10"
+              className="px-4 py-2.5 rounded-xl border border-white/25 text-white text-xs font-bold hover:bg-white/10 transition-colors"
             >
               Restart Review
             </button>
-            <button onClick={onExit} className="px-4 py-2.5 rounded-xl text-white/60 text-xs font-medium hover:bg-white/10">
+            <button onClick={onExit} className="px-4 py-2.5 rounded-xl text-white/60 text-xs font-bold hover:bg-white/10 transition-colors">
               Exit
             </button>
           </div>
@@ -198,27 +199,35 @@ export const RevisionFeedView: React.FC<RevisionFeedViewProps> = ({ resources, t
         </button>
       </div>
 
-      {showJumpList && (
-        <div className="absolute top-14 sm:top-16 right-3 sm:right-4 left-3 sm:left-auto z-40 sm:w-64 max-h-[70vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-2 space-y-1">
-          {items.map((r, i) => (
-            <button
-              key={r.id}
-              onClick={() => {
-                scrollToIndex(i);
-                setShowJumpList(false);
-              }}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between gap-2 ${
-                i === index
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              }`}
-            >
-              <span className="truncate">{r.title}</span>
-              {r.userNotes && <span className="text-amber-500 shrink-0">📝</span>}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {showJumpList && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="absolute top-14 sm:top-16 right-3 sm:right-4 left-3 sm:left-auto z-40 sm:w-64 max-h-[70vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-2 space-y-1"
+          >
+            {items.map((r, i) => (
+              <button
+                key={r.id}
+                onClick={() => {
+                  scrollToIndex(i);
+                  setShowJumpList(false);
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors ${
+                  i === index
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <span className="truncate">{r.title}</span>
+                {r.userNotes && <span className="text-amber-500 shrink-0">📝</span>}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

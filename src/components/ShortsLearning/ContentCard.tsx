@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Bookmark,
   BookmarkCheck,
@@ -242,77 +243,90 @@ export const ContentCard: React.FC<ContentCardProps> = ({
       </div>
 
       {/* Notes bottom sheet */}
-      {showNotes && (
-        <div className="absolute inset-0 z-20 flex items-end bg-black/40" onClick={() => setShowNotes(false)}>
-          <div
-            className="w-full bg-white dark:bg-zinc-900 rounded-t-3xl p-4 space-y-3 max-h-[75%] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {showNotes && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="absolute inset-0 z-20 flex items-end bg-black/40"
+            onClick={() => setShowNotes(false)}
           >
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">My Notes</h4>
-              <button onClick={() => setShowNotes(false)} className="p-1 rounded-lg text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <textarea
-              value={notesValue}
-              onChange={(e) => onNotesChange(e.target.value)}
-              placeholder="My notes... e.g. Centroid = center of a cluster"
-              rows={3}
-              autoFocus
-              className="w-full text-xs font-light text-zinc-800 dark:text-zinc-200 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none"
-            />
-            <p className="text-[10px] text-zinc-400">Saving a note also saves this video under "{node.title}".</p>
-
-            {timestampNotes.length > 0 && (
-              <div className="space-y-1">
-                {timestampNotes.map((t, i) => (
-                  <div key={i} className="text-[11px] text-zinc-600 dark:text-zinc-400 flex gap-2">
-                    <span className="font-mono text-zinc-500">{t.time}</span>
-                    <span>→ {t.note}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                value={tsTime}
-                onChange={(e) => setTsTime(e.target.value)}
-                placeholder="mm:ss"
-                className="w-16 text-[11px] px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400"
-              />
-              <input
-                type="text"
-                value={tsNote}
-                onChange={(e) => setTsNote(e.target.value)}
-                placeholder="Timestamp note (optional)"
-                className="flex-1 text-[11px] px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-              />
-              <button
-                onClick={() => {
-                  if (!tsTime.trim() || !tsNote.trim()) return;
-                  onAddTimestampNote(tsTime.trim(), tsNote.trim());
-                  setTsTime("");
-                  setTsNote("");
-                }}
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowNotes(false)}
-              className="w-full py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium"
+            <motion.div
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full bg-white dark:bg-zinc-900 rounded-t-3xl p-4 space-y-3 max-h-[75%] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
             >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">My Notes</h4>
+                <button onClick={() => setShowNotes(false)} className="p-1 rounded-lg text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <textarea
+                value={notesValue}
+                onChange={(e) => onNotesChange(e.target.value)}
+                placeholder="My notes... e.g. Centroid = center of a cluster"
+                rows={3}
+                autoFocus
+                className="w-full text-xs text-zinc-800 dark:text-zinc-200 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10 resize-none"
+              />
+              <p className="text-[10px] text-zinc-400">Saving a note also saves this video under "{node.title}".</p>
+
+              {timestampNotes.length > 0 && (
+                <div className="space-y-1">
+                  {timestampNotes.map((t, i) => (
+                    <div key={i} className="text-[11px] text-zinc-600 dark:text-zinc-400 flex gap-2">
+                      <span className="font-mono font-semibold text-zinc-500">{t.time}</span>
+                      <span>→ {t.note}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={tsTime}
+                  onChange={(e) => setTsTime(e.target.value)}
+                  placeholder="mm:ss"
+                  className="w-16 text-[11px] px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                />
+                <input
+                  type="text"
+                  value={tsNote}
+                  onChange={(e) => setTsNote(e.target.value)}
+                  placeholder="Timestamp note (optional)"
+                  className="flex-1 text-[11px] px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                />
+                <button
+                  onClick={() => {
+                    if (!tsTime.trim() || !tsNote.trim()) return;
+                    onAddTimestampNote(tsTime.trim(), tsNote.trim());
+                    setTsTime("");
+                    setTsNote("");
+                  }}
+                  className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowNotes(false)}
+                className="w-full py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold transition-colors hover:bg-zinc-800 dark:hover:bg-zinc-200"
+              >
+                Done
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
