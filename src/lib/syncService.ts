@@ -29,6 +29,7 @@ import {
   SavedLearningResource,
   TeachBackEvaluation,
   RevisionPlan,
+  PodcastEpisode,
 } from "../types";
 
 export interface UserProfile {
@@ -742,6 +743,43 @@ export async function deleteTeachBackEvaluationFromCloud(id: string): Promise<vo
     await deleteDoc(doc(db, "teachback_evaluations", id));
   } catch (err) {
     console.error("Error deleting teach-back evaluation from cloud:", err);
+  }
+}
+
+// ==================== PODCAST EPISODES ==================== //
+
+export async function fetchUserPodcastsFromCloud(userId: string): Promise<PodcastEpisode[]> {
+  try {
+    const q = query(collection(db, "podcasts"), where("ownerId", "==", userId));
+    const snap = await getDocs(q);
+    const list: PodcastEpisode[] = [];
+    snap.forEach((docSnap) => {
+      list.push(deserializeFromFirestore(docSnap.data()) as PodcastEpisode);
+    });
+    return list;
+  } catch (err) {
+    console.error("Error fetching podcast episodes from cloud:", err);
+    return [];
+  }
+}
+
+export async function savePodcastToCloud(episode: PodcastEpisode, userId: string): Promise<boolean> {
+  try {
+    const ref = doc(db, "podcasts", episode.id);
+    const payload = sanitizeForFirestore({ ...episode, ownerId: userId });
+    await setDoc(ref, payload);
+    return true;
+  } catch (err) {
+    console.error("Error saving podcast episode to cloud:", err);
+    return false;
+  }
+}
+
+export async function deletePodcastFromCloud(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "podcasts", id));
+  } catch (err) {
+    console.error("Error deleting podcast episode from cloud:", err);
   }
 }
 

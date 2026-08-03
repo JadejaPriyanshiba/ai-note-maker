@@ -1,5 +1,5 @@
 import { getAISettings, incrementAIRequestCount } from "./storage";
-import { LearnerLevel, Complexity, Depth, NoteLanguage, QuestionType, Question } from "../types";
+import { LearnerLevel, Complexity, Depth, NoteLanguage, QuestionType, Question, PodcastTurn } from "../types";
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -211,7 +211,7 @@ export async function generatePodcastScript(noteTitle: string, topicTitle: strin
   if (!data.success) {
     throw new Error(data.error || "Podcast script generation failed");
   }
-  return data.dialogue as { speaker: "Alex (Host)" | "Sam (Expert)"; text: string }[];
+  return data.dialogue as PodcastTurn[];
 }
 
 export async function generateFlashcards(params: {
