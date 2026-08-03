@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { motion } from "motion/react";
 import { fadeInUp } from "../../lib/motion";
 import { NoteDocument, NoteSection, NoteBlock, StudentTagType, NoteVersion } from "../../types";
@@ -8,13 +8,41 @@ import { CollectionSelectorModal } from "../Collections/CollectionSelectorModal"
 import { AIFlashcardGeneratorModal } from "../Flashcards/AIFlashcardGeneratorModal";
 import { PublishModal } from "../Community/PublishModal";
 import { ConfirmModal } from "../ConfirmModal";
-import { 
-  ArrowLeft, Save, Share2, Download, Printer, History, Plus, Trash2, 
-  Sparkles, CheckSquare, AlertCircle, Bookmark, HelpCircle, FileCheck, 
+import {
+  ArrowLeft, Save, Share2, Download, Printer, History, Plus, Trash2,
+  Sparkles, CheckSquare, AlertCircle, Bookmark, HelpCircle, FileCheck,
   Code, Table as TableIcon, Edit3, MessageSquare, Copy, Check, ChevronDown, RefreshCw,
   ChevronLeft, ChevronRight, Compass, Folder, Layers, GitFork, BookOpen, Lock,
   Maximize2, Minimize2, X
 } from "lucide-react";
+
+// Grows to fit its content exactly — never shorter nor taller than the text — instead of a
+// fixed row-count estimate that under- or over-shoots for long or short content. Used for every
+// editable block field so long text wraps and the block grows vertically instead of causing
+// horizontal scroll inside a single-line input.
+const AutoResizeTextarea: React.FC<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement> & { minRows?: number }
+> = ({ minRows = 1, className = "", value, onChange, ...rest }) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={minRows}
+      value={value}
+      onChange={onChange}
+      className={`resize-none overflow-hidden ${className}`}
+      {...rest}
+    />
+  );
+};
 
 interface NoteStudioProps {
   note?: NoteDocument;
@@ -192,6 +220,33 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
     });
 
     handleUpdateNote({ ...note, sections: updatedSections });
+  };
+
+  // Table row/column editing — manual tables start at 2x2 (see handleAddBlock) but users need to
+  // grow or shrink them afterwards; each keeps at least a header row and one column so the block
+  // never collapses into something unrenderable.
+  const handleAddTableRow = (block: NoteBlock) => {
+    const data = block.tableData || [];
+    const cols = data[0]?.length || 1;
+    handleUpdateBlock(block.id, { tableData: [...data, Array(cols).fill("")] });
+  };
+
+  const handleRemoveTableRow = (block: NoteBlock, rowIdx: number) => {
+    const data = block.tableData || [];
+    if (data.length <= 2) return; // keep the header row + at least one data row
+    handleUpdateBlock(block.id, { tableData: data.filter((_, i) => i !== rowIdx) });
+  };
+
+  const handleAddTableColumn = (block: NoteBlock) => {
+    const data = block.tableData || [];
+    const updated = data.map((row, i) => [...row, i === 0 ? `Column ${row.length + 1}` : ""]);
+    handleUpdateBlock(block.id, { tableData: updated });
+  };
+
+  const handleRemoveTableColumn = (block: NoteBlock, colIdx: number) => {
+    const data = block.tableData || [];
+    if ((data[0]?.length || 0) <= 1) return; // keep at least one column
+    handleUpdateBlock(block.id, { tableData: data.map((row) => row.filter((_, i) => i !== colIdx)) });
   };
 
   // AI Selection Action execution
@@ -380,18 +435,20 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
             </div>
           `;
         } else if (block.type === "table") {
+          const colCount = block.tableData?.[0]?.length || 1;
           const rowsHTML = (block.tableData || [])
             .map((row, rIdx) => {
               const cellTag = rIdx === 0 ? "th" : "td";
               const cellStyle =
-                rIdx === 0
+                (rIdx === 0
                   ? "border:1px solid #d4d4d8; padding:8px 12px; text-align:left; font-weight:700; background-color:#f4f4f5; color:#09090b;"
-                  : "border:1px solid #d4d4d8; padding:8px 12px; text-align:left; color:#18181b;";
+                  : "border:1px solid #d4d4d8; padding:8px 12px; text-align:left; color:#18181b;") +
+                ` width:${100 / colCount}%; word-break:break-word; white-space:pre-wrap;`;
               const cellsHTML = row.map((cell) => `<${cellTag} style="${cellStyle}">${escapeHtml(cell)}</${cellTag}>`).join("");
               return `<tr>${cellsHTML}</tr>`;
             })
             .join("");
-          blocksHTML += `<table style="width:100%; border-collapse:collapse; font-size:13px; margin:16px 0; page-break-inside:avoid; break-inside:avoid;">${rowsHTML}</table>`;
+          blocksHTML += `<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:13px; margin:16px 0; page-break-inside:avoid; break-inside:avoid;">${rowsHTML}</table>`;
         } else if (block.type === "code") {
           const lang = (block.language || "code").toUpperCase();
           blocksHTML += `
@@ -880,8 +937,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                           {block.content}
                         </h3>
                       ) : (
-                        <input
-                          type="text"
+                        <AutoResizeTextarea
                           value={block.content}
                           onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
                           className="w-full font-bold text-lg text-zinc-900 dark:text-zinc-100 bg-transparent border-b border-transparent focus:border-zinc-500 focus:outline-none py-1"
@@ -895,11 +951,11 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                           {block.content}
                         </p>
                       ) : (
-                        <textarea
+                        <AutoResizeTextarea
                           value={block.content}
                           onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                          rows={Math.max(2, Math.ceil(block.content.length / 80))}
-                          className="w-full text-sm text-zinc-800 dark:text-zinc-200 bg-transparent border-b border-transparent focus:border-zinc-500 focus:outline-none py-1 resize-none leading-relaxed"
+                          minRows={2}
+                          className="w-full text-sm text-zinc-800 dark:text-zinc-200 bg-transparent border-b border-transparent focus:border-zinc-500 focus:outline-none py-1 leading-relaxed"
                         />
                       )
                     )}
@@ -916,11 +972,11 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                               {block.content}
                             </p>
                           ) : (
-                            <textarea
+                            <AutoResizeTextarea
                               value={block.content}
                               onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                              rows={Math.max(2, Math.ceil((block.content || "").length / 55))}
-                              className="w-full text-xs font-medium bg-transparent focus:outline-none resize-none leading-relaxed whitespace-pre-wrap break-words py-0.5"
+                              minRows={2}
+                              className="w-full text-xs font-medium bg-transparent focus:outline-none leading-relaxed break-words py-0.5"
                             />
                           )}
                         </div>
@@ -931,20 +987,19 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                     {block.type === "bullet_list" && (
                       <div className="space-y-1.5 pl-4 border-l-2 border-zinc-300 dark:border-zinc-700">
                         {block.items?.map((item, idx) => (
-                          <div key={idx} className="flex items-center space-x-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300 shrink-0" />
+                          <div key={idx} className="flex items-start space-x-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300 shrink-0 mt-1.5" />
                             {isReadOnlyState ? (
-                              <span className="text-xs text-zinc-800 dark:text-zinc-200">{item}</span>
+                              <span className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap break-words py-0.5">{item}</span>
                             ) : (
-                              <input
-                                type="text"
+                              <AutoResizeTextarea
                                 value={item}
                                 onChange={(e) => {
                                   const newItems = [...(block.items || [])];
                                   newItems[idx] = e.target.value;
                                   handleUpdateBlock(block.id, { items: newItems });
                                 }}
-                                className="w-full text-xs text-zinc-800 dark:text-zinc-200 bg-transparent focus:outline-none"
+                                className="w-full text-xs text-zinc-800 dark:text-zinc-200 bg-transparent focus:outline-none break-words py-0.5"
                               />
                             )}
                           </div>
@@ -962,11 +1017,11 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                         {isReadOnlyState ? (
                           <pre className="overflow-x-auto text-xs font-mono text-zinc-200 whitespace-pre-wrap">{block.content}</pre>
                         ) : (
-                          <textarea
+                          <AutoResizeTextarea
                             value={block.content}
                             onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                            rows={4}
-                            className="w-full bg-transparent focus:outline-none resize-none font-mono text-xs text-zinc-200"
+                            minRows={4}
+                            className="w-full bg-transparent focus:outline-none font-mono text-xs text-zinc-200"
                           />
                         )}
                       </div>
@@ -977,19 +1032,18 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                       <div className="space-y-1.5 pl-1">
                         {block.items?.map((item, idx) => (
                           <div key={idx} className="flex items-start space-x-2">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 shrink-0 w-4 text-right">{idx + 1}.</span>
+                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 shrink-0 w-4 text-right mt-0.5">{idx + 1}.</span>
                             {isReadOnlyState ? (
-                              <span className="text-xs text-zinc-800 dark:text-zinc-200">{item}</span>
+                              <span className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap break-words py-0.5">{item}</span>
                             ) : (
-                              <input
-                                type="text"
+                              <AutoResizeTextarea
                                 value={item}
                                 onChange={(e) => {
                                   const newItems = [...(block.items || [])];
                                   newItems[idx] = e.target.value;
                                   handleUpdateBlock(block.id, { items: newItems });
                                 }}
-                                className="w-full text-xs text-zinc-800 dark:text-zinc-200 bg-transparent focus:outline-none"
+                                className="w-full text-xs text-zinc-800 dark:text-zinc-200 bg-transparent focus:outline-none break-words py-0.5"
                               />
                             )}
                           </div>
@@ -1003,7 +1057,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                         {block.items?.map((item, idx) => {
                           const checked = !!block.checkedItems?.[idx];
                           return (
-                            <div key={idx} className="flex items-center space-x-2">
+                            <div key={idx} className="flex items-start space-x-2">
                               <button
                                 type="button"
                                 disabled={isReadOnlyState}
@@ -1012,7 +1066,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                                   newChecked[idx] = !checked;
                                   handleUpdateBlock(block.id, { checkedItems: newChecked });
                                 }}
-                                className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${
+                                className={`w-4 h-4 mt-0.5 rounded border shrink-0 flex items-center justify-center transition-colors ${
                                   isReadOnlyState ? "cursor-default" : "cursor-pointer"
                                 } ${
                                   checked
@@ -1023,19 +1077,18 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                                 {checked && <Check className="w-3 h-3 text-white dark:text-zinc-900" />}
                               </button>
                               {isReadOnlyState ? (
-                                <span className={`text-xs ${checked ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-800 dark:text-zinc-200"}`}>
+                                <span className={`text-xs whitespace-pre-wrap break-words py-0.5 ${checked ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-800 dark:text-zinc-200"}`}>
                                   {item}
                                 </span>
                               ) : (
-                                <input
-                                  type="text"
+                                <AutoResizeTextarea
                                   value={item}
                                   onChange={(e) => {
                                     const newItems = [...(block.items || [])];
                                     newItems[idx] = e.target.value;
                                     handleUpdateBlock(block.id, { items: newItems });
                                   }}
-                                  className={`w-full text-xs bg-transparent focus:outline-none ${
+                                  className={`w-full text-xs bg-transparent focus:outline-none break-words py-0.5 ${
                                     checked ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-800 dark:text-zinc-200"
                                   }`}
                                 />
@@ -1052,11 +1105,11 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                         {isReadOnlyState ? (
                           <p className="text-sm italic text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">"{block.content}"</p>
                         ) : (
-                          <textarea
+                          <AutoResizeTextarea
                             value={block.content}
                             onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                            rows={Math.max(2, Math.ceil(block.content.length / 80))}
-                            className="w-full text-sm italic text-zinc-700 dark:text-zinc-300 bg-transparent focus:outline-none resize-none"
+                            minRows={2}
+                            className="w-full text-sm italic text-zinc-700 dark:text-zinc-300 bg-transparent focus:outline-none"
                           />
                         )}
                       </blockquote>
@@ -1071,11 +1124,11 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                             {block.content}
                           </p>
                         ) : (
-                          <textarea
+                          <AutoResizeTextarea
                             value={block.content}
                             onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                            rows={Math.max(2, Math.ceil((block.content || "").length / 70))}
-                            className="flex-1 text-xs font-medium text-amber-900 dark:text-amber-200 bg-transparent focus:outline-none resize-none leading-relaxed"
+                            minRows={2}
+                            className="flex-1 text-xs font-medium text-amber-900 dark:text-amber-200 bg-transparent focus:outline-none leading-relaxed"
                           />
                         )}
                       </div>
@@ -1083,41 +1136,91 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
 
                     {/* Table */}
                     {block.type === "table" && (
-                      <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
-                        <table className="w-full text-xs border-collapse">
-                          <tbody>
-                            {(block.tableData || []).map((row, rIdx) => {
-                              const CellTag: any = rIdx === 0 ? "th" : "td";
-                              return (
-                                <tr key={rIdx} className={rIdx === 0 ? "bg-zinc-100 dark:bg-zinc-800" : "border-t border-zinc-200 dark:border-zinc-700"}>
-                                  {row.map((cell, cIdx) => (
-                                    <CellTag
-                                      key={cIdx}
-                                      className={`px-3 py-2 text-left align-top border-r border-zinc-200 dark:border-zinc-700 last:border-r-0 ${
-                                        rIdx === 0 ? "font-bold text-zinc-900 dark:text-zinc-100" : "text-zinc-700 dark:text-zinc-300"
-                                      }`}
-                                    >
-                                      {isReadOnlyState ? (
-                                        <span className="whitespace-pre-wrap">{cell}</span>
-                                      ) : (
-                                        <input
-                                          type="text"
-                                          value={cell}
-                                          onChange={(e) => {
-                                            const newTableData = (block.tableData || []).map((r) => [...r]);
-                                            newTableData[rIdx][cIdx] = e.target.value;
-                                            handleUpdateBlock(block.id, { tableData: newTableData });
-                                          }}
-                                          className="w-full bg-transparent focus:outline-none"
-                                        />
-                                      )}
-                                    </CellTag>
-                                  ))}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                      <div className="space-y-2">
+                        <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+                          <table className="w-full text-xs border-collapse table-fixed">
+                            <tbody>
+                              {(block.tableData || []).map((row, rIdx) => {
+                                const CellTag: any = rIdx === 0 ? "th" : "td";
+                                const colCount = row.length || 1;
+                                return (
+                                  <tr key={rIdx} className={rIdx === 0 ? "bg-zinc-100 dark:bg-zinc-800" : "border-t border-zinc-200 dark:border-zinc-700"}>
+                                    {row.map((cell, cIdx) => (
+                                      <CellTag
+                                        key={cIdx}
+                                        style={{ width: `${100 / colCount}%` }}
+                                        className={`relative px-3 py-2 text-left align-top border-r border-zinc-200 dark:border-zinc-700 last:border-r-0 ${
+                                          rIdx === 0 ? "font-bold text-zinc-900 dark:text-zinc-100" : "text-zinc-700 dark:text-zinc-300"
+                                        }`}
+                                      >
+                                        {isReadOnlyState ? (
+                                          <span className="whitespace-pre-wrap break-words">{cell}</span>
+                                        ) : (
+                                          <>
+                                            <AutoResizeTextarea
+                                              value={cell}
+                                              onChange={(e) => {
+                                                const newTableData = (block.tableData || []).map((r) => [...r]);
+                                                newTableData[rIdx][cIdx] = e.target.value;
+                                                handleUpdateBlock(block.id, { tableData: newTableData });
+                                              }}
+                                              className={`w-full bg-transparent focus:outline-none break-words ${rIdx === 0 ? "pr-4" : ""}`}
+                                            />
+                                            {rIdx === 0 && row.length > 1 && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleRemoveTableColumn(block, cIdx)}
+                                                className="absolute top-1 right-1 p-0.5 rounded text-zinc-400 hover:text-red-600 hover:bg-white dark:hover:bg-zinc-900"
+                                                title="Remove column"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                      </CellTag>
+                                    ))}
+                                    {!isReadOnlyState && (
+                                      <td className="w-7 px-1 align-top border-l border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/40">
+                                        {rIdx === 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleAddTableColumn(block)}
+                                            className="p-0.5 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                            title="Add column"
+                                          >
+                                            <Plus className="w-3.5 h-3.5" />
+                                          </button>
+                                        ) : (
+                                          (block.tableData?.length || 0) > 2 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveTableRow(block, rIdx)}
+                                              className="p-0.5 rounded text-zinc-400 hover:text-red-600 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                              title="Remove row"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          )
+                                        )}
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        {!isReadOnlyState && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddTableRow(block)}
+                            className="px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 text-[11px] font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add Row</span>
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1573,16 +1676,18 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
 
                         {block.type === "table" && (
                           <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-700">
-                            <table className="w-full text-xs sm:text-sm border-collapse">
+                            <table className="w-full text-xs sm:text-sm border-collapse table-fixed">
                               <tbody>
                                 {(block.tableData || []).map((row, rIdx) => {
                                   const CellTag: any = rIdx === 0 ? "th" : "td";
+                                  const colCount = row.length || 1;
                                   return (
                                     <tr key={rIdx} className={rIdx === 0 ? "bg-zinc-100 dark:bg-zinc-800" : "border-t border-zinc-200 dark:border-zinc-700"}>
                                       {row.map((cell, cIdx) => (
                                         <CellTag
                                           key={cIdx}
-                                          className={`px-3 py-2 text-left align-top border-r border-zinc-200 dark:border-zinc-700 last:border-r-0 whitespace-pre-wrap ${
+                                          style={{ width: `${100 / colCount}%` }}
+                                          className={`px-3 py-2 text-left align-top border-r border-zinc-200 dark:border-zinc-700 last:border-r-0 whitespace-pre-wrap break-words ${
                                             rIdx === 0 ? "font-bold text-zinc-900 dark:text-zinc-100" : "text-zinc-700 dark:text-zinc-300"
                                           }`}
                                         >
@@ -1702,7 +1807,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                   </div>
                 )}
                 {b.type === "table" && (
-                  <table className="w-full text-xs border-collapse my-2" style={{ borderCollapse: "collapse" }}>
+                  <table className="w-full text-xs my-2" style={{ borderCollapse: "collapse", tableLayout: "fixed" }}>
                     <tbody>
                       {(b.tableData || []).map((row, rIdx) => (
                         <tr key={rIdx}>
@@ -1711,7 +1816,8 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                             return (
                               <CellTag
                                 key={cIdx}
-                                className={`border border-gray-400 px-2 py-1 text-left ${rIdx === 0 ? "font-bold bg-gray-100" : ""}`}
+                                style={{ width: `${100 / (row.length || 1)}%` }}
+                                className={`border border-gray-400 px-2 py-1 text-left break-words whitespace-pre-wrap ${rIdx === 0 ? "font-bold bg-gray-100" : ""}`}
                               >
                                 {cell}
                               </CellTag>
