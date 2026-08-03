@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { X, List, Loader2, WifiOff, GraduationCap } from "lucide-react";
 import { LearningContent, LearningNode, LearningSession, LearningTree } from "../../types";
 import { getOrderedLeafNodes, searchLearningContentForNode } from "../../lib/learningService";
@@ -283,7 +284,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
     return (
       <div className="max-w-md mx-auto py-20 text-center space-y-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">No learning items available in this tree.</p>
-        <button onClick={onExit} className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium">
+        <button onClick={onExit} className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors">
           Back to Learning Map
         </button>
       </div>
@@ -327,7 +328,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
                   <p className="text-xs text-white/70">{error}</p>
                   <button
                     onClick={() => fetchNodeContent(node)}
-                    className="px-3 py-1.5 rounded-lg bg-white text-zinc-900 text-xs font-medium"
+                    className="px-3 py-1.5 rounded-lg bg-white text-zinc-900 text-xs font-bold hover:bg-zinc-100 transition-colors"
                   >
                     Retry
                   </button>
@@ -341,7 +342,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
                   </p>
                   <button
                     onClick={() => scrollToNodeIndex(i + 1)}
-                    className="px-3 py-1.5 rounded-lg bg-white text-zinc-900 text-xs font-medium"
+                    className="px-3 py-1.5 rounded-lg bg-white text-zinc-900 text-xs font-bold hover:bg-zinc-100 transition-colors"
                   >
                     Next Topic
                   </button>
@@ -391,7 +392,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
         {/* Final section: session summary */}
         <div className="h-[100dvh] w-full snap-start snap-always relative bg-zinc-950 flex flex-col items-center justify-center text-white text-center px-8 space-y-4">
           <GraduationCap className="w-9 h-9 text-white/80" />
-          <h2 className="text-lg font-semibold">You've reached the end</h2>
+          <h2 className="text-lg font-bold">You've reached the end</h2>
           <p className="text-xs text-white/60">
             Completed {sessionState.completedNodeIds.length} of {activeLeafNodes.length} topics this session.
           </p>
@@ -399,7 +400,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
             {completedTitles.length >= TEST_ME_THRESHOLD && (
               <button
                 onClick={() => onTestMe(testMeTopics())}
-                className="px-4 py-2.5 rounded-xl bg-white text-zinc-900 text-xs font-medium flex items-center justify-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-white text-zinc-900 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-zinc-100 transition-colors"
               >
                 <GraduationCap className="w-3.5 h-3.5" />
                 <span>Test Me on {completedTitles.length} Topics</span>
@@ -407,7 +408,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
             )}
             <button
               onClick={() => scrollToNodeIndex(0)}
-              className="px-4 py-2.5 rounded-xl border border-white/25 text-white text-xs font-medium hover:bg-white/10"
+              className="px-4 py-2.5 rounded-xl border border-white/25 text-white text-xs font-bold hover:bg-white/10 transition-colors"
             >
               Restart from the Beginning
             </button>
@@ -416,7 +417,7 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
                 persistSession((prev) => ({ ...prev, endedAt: new Date().toISOString() }));
                 onExit();
               }}
-              className="px-4 py-2.5 rounded-xl text-white/60 text-xs font-medium hover:bg-white/10"
+              className="px-4 py-2.5 rounded-xl text-white/60 text-xs font-bold hover:bg-white/10 transition-colors"
             >
               End Session
             </button>
@@ -448,26 +449,34 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
         </button>
       </div>
 
-      {budgetReached && !budgetBannerDismissed && (
-        <div className="absolute inset-x-3 sm:inset-x-4 top-14 sm:top-16 z-30 flex items-center justify-between gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur rounded-xl px-3 py-2 shadow-lg">
-          <span className="text-[11px] text-zinc-700 dark:text-zinc-300">
-            Session goal reached (~{sessionState.timeLimitMinutes} min)
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            {completedTitles.length >= TEST_ME_THRESHOLD && (
-              <button
-                onClick={() => onTestMe(testMeTopics())}
-                className="text-[11px] font-medium px-2 py-1 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-              >
-                Test Me
+      <AnimatePresence>
+        {budgetReached && !budgetBannerDismissed && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="absolute inset-x-3 sm:inset-x-4 top-14 sm:top-16 z-30 flex items-center justify-between gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur rounded-xl px-3 py-2 shadow-lg"
+          >
+            <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+              Session goal reached (~{sessionState.timeLimitMinutes} min)
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {completedTitles.length >= TEST_ME_THRESHOLD && (
+                <button
+                  onClick={() => onTestMe(testMeTopics())}
+                  className="text-[11px] font-bold px-2 py-1 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+                >
+                  Test Me
+                </button>
+              )}
+              <button onClick={() => setBudgetBannerDismissed(true)} className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+                <X className="w-3.5 h-3.5" />
               </button>
-            )}
-            <button onClick={() => setBudgetBannerDismissed(true)} className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {currentContent && currentContent.length > 1 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex items-center justify-center gap-1.5">
@@ -477,56 +486,77 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
         </div>
       )}
 
-      {showJumpList && (
-        <div className="absolute top-14 sm:top-16 right-3 sm:right-4 left-3 sm:left-auto z-40 sm:w-64 max-h-[70vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-2 space-y-1">
-          {activeLeafNodes.map((n, i) => (
-            <button
-              key={n.id}
-              onClick={() => {
-                scrollToNodeIndex(i);
-                setShowJumpList(false);
-              }}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between gap-2 ${
-                i === nodeIndex
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              }`}
-            >
-              <span className="truncate">{n.title}</span>
-              {sessionState.completedNodeIds.includes(n.id) && <span className="text-emerald-500 shrink-0">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {showSkipMenu && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowSkipMenu(false)}>
-          <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl w-full max-w-sm p-4 space-y-2"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {showJumpList && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="absolute top-14 sm:top-16 right-3 sm:right-4 left-3 sm:left-auto z-40 sm:w-64 max-h-[70vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-2 space-y-1"
           >
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 px-1">Skip "{currentNode?.title}"</h3>
-            <button
-              onClick={skipForSession}
-              className="w-full text-left px-3 py-2.5 rounded-xl text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            {activeLeafNodes.map((n, i) => (
+              <button
+                key={n.id}
+                onClick={() => {
+                  scrollToNodeIndex(i);
+                  setShowJumpList(false);
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors ${
+                  i === nodeIndex
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <span className="truncate">{n.title}</span>
+                {sessionState.completedNodeIds.includes(n.id) && <span className="text-emerald-500 shrink-0">✓</span>}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSkipMenu && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowSkipMenu(false)}
+          >
+            <motion.div
+              initial={{ y: 16, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 12, opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl w-full max-w-sm p-4 space-y-2"
+              onClick={(e) => e.stopPropagation()}
             >
-              Skip for this session only
-            </button>
-            <button
-              onClick={skipPermanently}
-              className="w-full text-left px-3 py-2.5 rounded-xl text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Skip permanently (hide in future sessions)
-            </button>
-            <button
-              onClick={() => setShowSkipMenu(false)}
-              className="w-full text-center px-3 py-2 rounded-xl text-xs text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 px-1">Skip "{currentNode?.title}"</h3>
+              <button
+                onClick={skipForSession}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Skip for this session only
+              </button>
+              <button
+                onClick={skipPermanently}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Skip permanently (hide in future sessions)
+              </button>
+              <button
+                onClick={() => setShowSkipMenu(false)}
+                className="w-full text-center px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

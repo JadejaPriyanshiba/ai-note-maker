@@ -1,8 +1,10 @@
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { TestAttempt, FlashcardDeck } from "../../types";
 import { generateRevisionPlan, generateFlashcards } from "../../lib/aiService";
 import { saveRevisionResource, saveFlashcardDeck, saveFlashcard } from "../../lib/storage";
-import { Award, CheckCircle2, XCircle, Sparkles, ArrowLeft, RefreshCw, Layers, TrendingUp, RotateCcw } from "lucide-react";
+import { Award, CheckCircle2, XCircle, Sparkles, Layers, TrendingUp, RotateCcw, Loader2 } from "lucide-react";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
 
 interface TestResultsViewProps {
   attempt: TestAttempt;
@@ -121,26 +123,45 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
   const correctCount = questionDetails.filter((item) => item.isCorrect).length;
   const incorrectCount = questionDetails.length - correctCount;
 
+  const scoreTier =
+    attempt.percentage >= 80 ? "great" : attempt.percentage >= 60 ? "okay" : "weak";
+  const scoreRing =
+    scoreTier === "great"
+      ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-900"
+      : scoreTier === "okay"
+      ? "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-900"
+      : "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-300 dark:border-red-900";
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       {/* Retest Improvement Banner (if retest) */}
       {attempt.improvementPercentagePoints !== undefined && (
-        <div className="p-4 rounded-2xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 flex items-center justify-between gap-3 shadow-md">
+        <motion.div
+          variants={fadeInUp}
+          initial="hidden"
+          animate="show"
+          className="p-4 rounded-2xl bg-emerald-600 text-white flex items-center justify-between gap-3 shadow-md"
+        >
           <div className="flex items-center space-x-3">
             <TrendingUp className="w-6 h-6 shrink-0" />
             <div>
               <h4 className="font-bold text-sm">Retest Learning Loop Completed!</h4>
-              <p className="text-xs opacity-90 font-light">
+              <p className="text-xs opacity-90">
                 Your performance improved by <strong>+{attempt.improvementPercentagePoints}% points</strong> compared to your initial test!
               </p>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Top Card: Score Summary */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-sm text-center space-y-4">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-sm text-center space-y-4"
+      >
+        <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full border-2 ${scoreRing}`}>
           <Award className="w-8 h-8" />
         </div>
 
@@ -168,10 +189,15 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
             <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{attempt.focusViolations}</span>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Topic Breakdown & Targeted Actions */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4 shadow-sm">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4 shadow-sm"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-3">
           <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
             Topic Performance Breakdown
@@ -182,9 +208,9 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
                 type="button"
                 onClick={handleGenerateRevision}
                 disabled={isGeneratingPlan}
-                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-1 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs flex items-center space-x-1 disabled:opacity-50 transition-colors"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                {isGeneratingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 <span>{isGeneratingPlan ? "Generating..." : "AI Revision Plan"}</span>
               </button>
 
@@ -192,52 +218,62 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
                 type="button"
                 onClick={handleGenerateWeakCards}
                 disabled={isGeneratingCards}
-                className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs font-bold flex items-center space-x-1 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs font-bold flex items-center space-x-1 disabled:opacity-50 transition-colors"
               >
-                <Layers className="w-3.5 h-3.5" />
+                {isGeneratingCards ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
                 <span>{isGeneratingCards ? "Generating..." : "Weak Flashcards"}</span>
               </button>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <motion.div variants={staggerContainer()} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {Object.entries(attempt.topicScores || {}).map(([tId, info]: [string, { correct: number; total: number; title: string }]) => {
             const acc = info.total > 0 ? Math.round((info.correct / info.total) * 100) : 0;
             const isWeak = acc < 60;
 
             return (
-              <div
+              <motion.div
                 key={tId}
-                className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 flex items-center justify-between text-xs"
+                variants={fadeInUp}
+                className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
+                  isWeak
+                    ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
+                    : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50"
+                }`}
               >
                 <div>
                   <span className="font-bold text-zinc-900 dark:text-zinc-100 block line-clamp-1">
                     {info.title}
                   </span>
-                  <span className="text-zinc-500">
+                  <span className="text-zinc-500 dark:text-zinc-400">
                     {info.correct} of {info.total} correct ({acc}%)
                   </span>
                 </div>
 
                 <span
-                  className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase ${
+                  className={`shrink-0 px-2.5 py-1 rounded text-[10px] font-bold uppercase ${
                     isWeak
-                      ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200"
-                      : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                      ? "bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200"
+                      : "bg-emerald-600 text-white"
                   }`}
                 >
                   {isWeak ? "Needs Review" : "Mastered ✓"}
                 </span>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Targeted AI Revision Plan Display */}
       {revisionPlan && (
-        <div className="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl p-6 space-y-4 shadow-sm">
+        <motion.div
+          variants={fadeInUp}
+          initial="hidden"
+          animate="show"
+          className="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl p-6 space-y-4 shadow-sm"
+        >
           <div className="flex items-center space-x-2 border-b border-zinc-700 dark:border-zinc-300 pb-3">
             <Sparkles className="w-5 h-5" />
             <h3 className="text-base font-bold">
@@ -257,11 +293,16 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
               ))}
             </ul>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Detailed Question Review */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-5 shadow-sm">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-5 shadow-sm"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-4">
           <div>
             <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
@@ -290,7 +331,7 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
               onClick={() => setQuestionFilter("correct")}
               className={`px-3 py-1 rounded-lg transition-all ${
                 questionFilter === "correct"
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
+                  ? "bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
                   : "text-zinc-500"
               }`}
             >
@@ -301,7 +342,7 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
               onClick={() => setQuestionFilter("incorrect")}
               className={`px-3 py-1 rounded-lg transition-all ${
                 questionFilter === "incorrect"
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
+                  ? "bg-white dark:bg-zinc-900 text-red-600 dark:text-red-400 shadow-xs"
                   : "text-zinc-500"
               }`}
             >
@@ -311,14 +352,15 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
         </div>
 
         {/* Question Cards List */}
-        <div className="space-y-4">
+        <motion.div variants={staggerContainer(0.04)} initial="hidden" animate="show" className="space-y-4">
           {filteredQuestions.map((item, idx) => (
-            <div
+            <motion.div
               key={item.question.id || idx}
+              variants={fadeInUp}
               className={`p-5 rounded-xl border space-y-3 text-xs ${
                 item.isCorrect
-                  ? "border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30"
-                  : "border-zinc-300 dark:border-zinc-700 bg-zinc-100/60 dark:bg-zinc-800/60"
+                  ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/10"
+                  : "border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-950/10"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -332,10 +374,8 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
                 </div>
 
                 <span
-                  className={`shrink-0 px-2.5 py-1 rounded-full font-bold text-[10px] uppercase flex items-center space-x-1 ${
-                    item.isCorrect
-                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                      : "bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200"
+                  className={`shrink-0 px-2.5 py-1 rounded-full font-bold text-[10px] uppercase flex items-center space-x-1 text-white ${
+                    item.isCorrect ? "bg-emerald-600" : "bg-red-600"
                   }`}
                 >
                   {item.isCorrect ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
@@ -367,17 +407,17 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
                   <p className="leading-relaxed">{item.question.explanation}</p>
                 </div>
               )}
-            </div>
+            </motion.div>
           ))}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800">
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
         >
           Back to Assessment Center
         </button>
@@ -385,7 +425,7 @@ export const TestResultsView: React.FC<TestResultsViewProps> = ({
         <button
           type="button"
           onClick={onRetake}
-          className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs shadow-sm flex items-center space-x-1.5"
+          className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs shadow-sm flex items-center space-x-1.5 transition-colors"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Retake Assessment</span>

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Question, TestConfig, TestAttempt } from "../../types";
 import { saveTestAttempt } from "../../lib/storage";
-import { Clock, ShieldAlert, Bookmark, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft, X } from "lucide-react";
+import { Clock, ShieldAlert, Bookmark, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft } from "lucide-react";
+import { fadeInUp, staggerContainer } from "../../lib/motion";
+import { Modal } from "../Modal";
 
 interface TestRunnerProps {
   config: TestConfig;
@@ -154,9 +157,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
   const isWarning = secondsRemaining <= 600 && secondsRemaining > 120;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Integrity Notice Banner */}
-      <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-3">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-3"
+      >
         <div className="flex items-center space-x-2">
           <ShieldAlert className="w-4 h-4 text-zinc-800 dark:text-zinc-200 shrink-0" />
           <span>
@@ -164,36 +172,47 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
           </span>
         </div>
         {focusViolations > 0 && (
-          <span className="px-2.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 font-bold text-[11px]">
+          <span className="px-2.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-[11px]">
             Violations: {focusViolations}
           </span>
         )}
-      </div>
+      </motion.div>
 
       {/* Timer Warning Banner if <= 10 mins */}
-      {(isWarning || isStrongWarning || isCritical) && (
-        <div
-          className={`p-3 rounded-xl text-xs font-bold flex items-center space-x-2 ${
-            isCritical
-              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 animate-pulse"
-              : isStrongWarning
-              ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900"
-              : "bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>
-            {isCritical
-              ? "CRITICAL TIME WARNING! Less than 30 seconds remaining!"
-              : isStrongWarning
-              ? "TIME WARNING! Less than 2 minutes remaining!"
-              : "Notice: Less than 10 minutes remaining."}
-          </span>
-        </div>
-      )}
+      <AnimatePresence>
+        {(isWarning || isStrongWarning || isCritical) && (
+          <motion.div
+            variants={fadeInUp}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className={`p-3 rounded-xl text-xs font-bold flex items-center space-x-2 ${
+              isCritical
+                ? "bg-red-600 text-white animate-pulse"
+                : isStrongWarning
+                ? "bg-amber-600 text-white"
+                : "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300"
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              {isCritical
+                ? "CRITICAL TIME WARNING! Less than 30 seconds remaining!"
+                : isStrongWarning
+                ? "TIME WARNING! Less than 2 minutes remaining!"
+                : "Notice: Less than 10 minutes remaining."}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Top Header Controls */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
             {config.subject} • Assessment Mode
@@ -205,7 +224,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
 
         <div className="flex items-center space-x-3">
           {/* Countdown Timer */}
-          <div className="px-3.5 py-1.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-bold flex items-center space-x-1.5 shadow-xs">
+          <div
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 shadow-xs ${
+              isCritical || isStrongWarning ? "bg-red-600 text-white" : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+            }`}
+          >
             <Clock className="w-4 h-4" />
             <span>{formatTime(secondsRemaining)}</span>
           </div>
@@ -213,15 +236,20 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
           <button
             type="button"
             onClick={() => setIsSubmitModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs shadow-sm"
+            className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs shadow-sm transition-colors"
           >
             Submit Test
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* QUESTION NAVIGATOR GRID */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm space-y-2">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm space-y-2"
+      >
         <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
           <span>Question Navigator</span>
           <div className="flex items-center space-x-3 text-[10px]">
@@ -234,7 +262,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
               <span>Unanswered (—)</span>
             </span>
             <span className="flex items-center space-x-1">
-              <span className="w-2.5 h-2.5 rounded bg-zinc-500 inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block"></span>
               <span>Marked (⚑)</span>
             </span>
           </div>
@@ -257,7 +285,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
                     : isAnswered
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 opacity-90"
                     : isMarked
-                    ? "bg-zinc-500 text-white"
+                    ? "bg-amber-500 text-white"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
                 }`}
               >
@@ -269,11 +297,17 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
             );
           })}
         </div>
-      </div>
+      </motion.div>
 
       {/* Main Question Card */}
       {currentQuestion && (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-sm space-y-6">
+        <motion.div
+          key={currentQuestion.id || currentIndex}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-sm space-y-6"
+        >
           <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <span className="text-xs font-semibold text-zinc-500">
               Topic: {currentQuestion.topicTitle}
@@ -283,7 +317,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
               onClick={handleToggleMarkReview}
               className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-colors ${
                 markedForReview.includes(currentQuestion.id)
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  ? "bg-amber-500 text-white"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
               }`}
             >
@@ -299,10 +333,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
 
           {/* Answer Options */}
           {currentQuestion.type === "mcq" && currentQuestion.options ? (
-            <div className="space-y-2.5">
+            <motion.div variants={staggerContainer(0.04)} initial="hidden" animate="show" className="space-y-2.5">
               {currentQuestion.options.map((opt, idx) => (
-                <button
+                <motion.button
                   key={`opt_${currentQuestion.id}_${idx}`}
+                  variants={fadeInUp}
                   type="button"
                   onClick={() => handleSelectAnswer(opt)}
                   className={`w-full text-left p-3.5 rounded-xl border text-xs font-medium transition-all flex items-center justify-between ${
@@ -313,9 +348,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
                 >
                   <span>{opt}</span>
                   {userAnswers[currentQuestion.id] === opt && <CheckCircle2 className="w-4 h-4" />}
-                </button>
+                </motion.button>
               ))}
-            </div>
+            </motion.div>
           ) : currentQuestion.type === "true_false" ? (
             <div className="grid grid-cols-2 gap-3">
               {["True", "False"].map((opt) => (
@@ -343,7 +378,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
                 value={userAnswers[currentQuestion.id] || ""}
                 onChange={(e) => handleSelectAnswer(e.target.value)}
                 placeholder="Enter answer..."
-                className="w-full p-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium focus:outline-none"
+                className="w-full p-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
               />
             </div>
           )}
@@ -354,85 +389,78 @@ export const TestRunner: React.FC<TestRunnerProps> = ({
               type="button"
               onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
               disabled={currentIndex === 0}
-              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-30"
+              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 flex items-center space-x-1.5 transition-colors"
             >
-              Previous
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Previous</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1))}
               disabled={currentIndex === questions.length - 1}
-              className="px-5 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold disabled:opacity-30"
+              className="px-5 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold disabled:opacity-30 flex items-center space-x-1.5 transition-colors"
             >
-              Next
+              <span>Next</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Submission Confirmation Modal */}
-      {isSubmitModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
-              <h3 className="font-bold text-base">Confirm Test Submission</h3>
-              <button
-                type="button"
-                onClick={() => setIsSubmitModalOpen(false)}
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      <Modal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} panelClassName="max-w-md">
+        <div className="p-6 sm:p-8 space-y-5">
+          <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+            Confirm Test Submission
+          </h3>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
+              <span className="text-zinc-500 block uppercase text-[10px] font-bold">Total Questions</span>
+              <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{questions.length}</span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
-                <span className="text-zinc-500 block uppercase text-[10px] font-bold">Total Questions</span>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{questions.length}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
-                <span className="text-zinc-500 block uppercase text-[10px] font-bold">Answered</span>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{answeredCount}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
-                <span className="text-zinc-500 block uppercase text-[10px] font-bold">Unanswered</span>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{unansweredCount}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
-                <span className="text-zinc-500 block uppercase text-[10px] font-bold">Marked for Review</span>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{markedCount}</span>
-              </div>
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+              <span className="text-emerald-700 dark:text-emerald-400 block uppercase text-[10px] font-bold">Answered</span>
+              <span className="font-bold text-sm text-emerald-900 dark:text-emerald-300">{answeredCount}</span>
             </div>
-
-            {unansweredCount > 0 && (
-              <p className="text-xs text-zinc-500 font-light italic">
-                Notice: You still have {unansweredCount} unanswered questions remaining.
-              </p>
-            )}
-
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setIsSubmitModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold"
-              >
-                Continue Test
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSubmitModalOpen(false);
-                  handleSubmitFinalTest();
-                }}
-                className="px-5 py-2 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs shadow-sm"
-              >
-                Confirm & Submit
-              </button>
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50">
+              <span className="text-red-700 dark:text-red-400 block uppercase text-[10px] font-bold">Unanswered</span>
+              <span className="font-bold text-sm text-red-900 dark:text-red-300">{unansweredCount}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+              <span className="text-amber-700 dark:text-amber-400 block uppercase text-[10px] font-bold">Marked for Review</span>
+              <span className="font-bold text-sm text-amber-900 dark:text-amber-300">{markedCount}</span>
             </div>
           </div>
+
+          {unansweredCount > 0 && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 italic">
+              Notice: You still have {unansweredCount} unanswered questions remaining.
+            </p>
+          )}
+
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setIsSubmitModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Continue Test
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSubmitModalOpen(false);
+                handleSubmitFinalTest();
+              }}
+              className="px-5 py-2 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs shadow-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+            >
+              Confirm & Submit
+            </button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };
