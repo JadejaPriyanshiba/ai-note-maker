@@ -21,7 +21,9 @@ import { FlashcardStudyView } from "./components/Flashcards/FlashcardStudyView";
 import { AIFlashcardGeneratorModal } from "./components/Flashcards/AIFlashcardGeneratorModal";
 import { AuthModal } from "./components/Auth/AuthModal";
 import { DataMigrationModal } from "./components/Auth/DataMigrationModal";
+import { GenerationStatusToast } from "./components/GenerationStatusToast";
 import { useAuth } from "./lib/AuthContext";
+import { useGeneration } from "./lib/GenerationContext";
 import { ShortsSetupView } from "./components/ShortsLearning/ShortsSetupView";
 import { LearningMapView } from "./components/ShortsLearning/LearningMapView";
 import { ShortsFeedView } from "./components/ShortsLearning/ShortsFeedView";
@@ -63,6 +65,7 @@ import { generateBatchedTestQuestions } from "./lib/aiService";
 
 export default function App() {
   const { user, setSyncing } = useAuth();
+  const { activeGeneration } = useGeneration();
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("app_theme");
     if (saved === "dark" || saved === "light") return saved;
@@ -195,12 +198,36 @@ export default function App() {
     setActiveView("roadmap_editor");
   };
 
+  // Only one background generation job runs at a time — starting a second would silently stall
+  // behind the first (see GenerationContext's loopActiveRef guard). Used before starting a fresh
+  // roadmap and before resuming an interrupted note.
+  const guardCanStartGeneration = (): boolean => {
+    if (activeGeneration?.isGenerating) {
+      alert(
+        `"${activeGeneration.note.title}" is still generating. Wait for it to finish (or check its progress from the status bar in the corner) before starting another one.`
+      );
+      return false;
+    }
+    return true;
+  };
+
+  // Resume a note that was left with pending/failed topics — e.g. generation was interrupted by
+  // a full page reload or closed tab, so GenerationContext has no memory of it anymore. Reads the
+  // per-topic status already persisted on the note itself to pick up right where it left off.
+  const handleContinueGeneration = (note: NoteDocument) => {
+    if (!guardCanStartGeneration()) return;
+    setActiveNote(note);
+    setBatchSize(1);
+    setActiveView("generation_progress");
+  };
+
   // Step 2: Approve Roadmap -> Create NoteDocument -> Move to GenerationProgress
   const handleApproveRoadmap = (
     approvedTopics: RoadmapTopic[],
     selectedBatchSize: number = 1
   ) => {
     if (!roadmapDraft) return;
+    if (!guardCanStartGeneration()) return;
 
     const newNote: NoteDocument = {
       id: `note_${Date.now()}`,
@@ -419,6 +446,7 @@ export default function App() {
             }}
             onOpenCommunity={() => setActiveView("community")}
             onOpenTests={() => setActiveView("test_generator")}
+            onContinueGeneration={handleContinueGeneration}
           />
         )}
 
@@ -467,6 +495,7 @@ export default function App() {
               setActiveView("audio_learning");
             }}
             onCreateNew={() => setActiveView("home")}
+            onContinueGeneration={handleContinueGeneration}
           />
         )}
 
@@ -686,6 +715,16 @@ export default function App() {
         onDeckCreated={(newDeck) => {
           setActiveDeck(newDeck);
           setActiveView("flashcard_editor");
+        }}
+      />
+
+      {/* Background note-generation status — visible from any view, see GenerationContext */}
+      <GenerationStatusToast
+        onOpenNote={(note) => {
+          const allDone = (note.roadmap || []).every((t) => t.status === "completed" || t.status === "skipped");
+          setActiveNote(note);
+          setIsNoteReadOnly(false);
+          setActiveView(allDone ? "note_studio" : "generation_progress");
         }}
       />
     </div>

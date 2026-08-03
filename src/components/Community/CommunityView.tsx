@@ -656,9 +656,21 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                           <div key={b.id} className="text-xs text-zinc-700 dark:text-zinc-300">
                             {b.type === "heading" && <span className="font-bold">{b.content}</span>}
                             {b.type === "paragraph" && <span>{b.content}</span>}
-                            {b.type === "student_tag" && (
+                            {(b.type === "bullet_list" || b.type === "numbered_list" || b.type === "checklist") && (
+                              <span className="text-zinc-600 dark:text-zinc-400">
+                                {(b.items || []).slice(0, 3).join(" • ")}
+                                {(b.items || []).length > 3 ? "…" : ""}
+                              </span>
+                            )}
+                            {b.type === "quote" && <span className="italic text-zinc-600 dark:text-zinc-400">"{b.content}"</span>}
+                            {b.type === "table" && (
+                              <span className="text-zinc-500 dark:text-zinc-500 italic">
+                                [Table: {(b.tableData?.[0] || []).join(", ")}]
+                              </span>
+                            )}
+                            {(b.type === "student_tag" || b.type === "callout") && (
                               <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-[11px] font-medium border border-amber-200/60 dark:border-amber-800/60">
-                                <strong>[{b.tagType?.toUpperCase()}]:</strong> {b.content}
+                                {b.type === "student_tag" && <strong>[{b.tagType?.toUpperCase()}]:</strong>} {b.content}
                               </div>
                             )}
                           </div>

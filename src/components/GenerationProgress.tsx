@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { motion } from "motion/react";
-import { NoteDocument, RoadmapTopic, NoteSection } from "../types";
-import { generateTopicNotes } from "../lib/aiService";
-import { saveNote } from "../lib/storage";
+import { NoteDocument } from "../types";
+import { useGeneration } from "../lib/GenerationContext";
 import { CheckCircle2, Loader2, AlertTriangle, ArrowRight, RefreshCw, SkipForward, ShieldCheck, FastForward } from "lucide-react";
 import { fadeInUp, staggerContainer } from "../lib/motion";
 
@@ -19,206 +18,27 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
   onComplete,
   onCancel,
 }) => {
-  const [note, setNote] = useState<NoteDocument>(initialNote);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [activeTopicIndex, setActiveTopicIndex] = useState<number>(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [failedTopicIndex, setFailedTopicIndex] = useState<number | null>(null);
-  
-  const isCancelledRef = useRef<boolean>(false);
+  const { activeGeneration, startGeneration, retryTopic, skipTopic, skipAllFailed } = useGeneration();
 
-  // Auto start generation if pending
+  // Kick off generation only the first time this note reaches this screen. The loop itself lives
+  // in GenerationContext, at the app root — it keeps running even if this screen unmounts because
+  // the user navigates elsewhere, instead of stopping dead like it used to. If this note is
+  // already registered with the context (re-navigating back to a running/paused generation),
+  // just observe its live state instead of re-triggering the loop — retry/skip/continue are
+  // explicit user actions, not something a plain re-visit should do on its own.
   useEffect(() => {
-    startOrResumeGeneration();
-    return () => {
-      isCancelledRef.current = true;
-    };
-  }, []);
-
-  const startOrResumeGeneration = async () => {
-    isCancelledRef.current = false;
-    setIsGenerating(true);
-    setErrorMessage(null);
-    setFailedTopicIndex(null);
-
-    const pendingTopics = note.roadmap || [];
-    let currentNoteState = { ...note, sections: note.sections || [] };
-
-    for (let i = 0; i < pendingTopics.length; i++) {
-      if (isCancelledRef.current) break;
-
-      const topic = pendingTopics[i];
-
-      // Skip already completed or skipped topics
-      if (topic.status === "completed" || topic.status === "skipped") continue;
-
-      setActiveTopicIndex(i);
-
-      // Pacing delay between sequential requests to prevent hitting rate limits
-      if (i > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      }
-
-      // Mark topic as generating
-      const updatedRoadmap = (currentNoteState.roadmap || []).map((t, idx) =>
-        idx === i ? { ...t, status: "generating" as const } : t
-      );
-      currentNoteState = { ...currentNoteState, roadmap: updatedRoadmap, generationStatus: "in_progress" };
-      setNote(currentNoteState);
-
-      try {
-        // AI Request for 1 Topic with auto client retry
-        let notesResult;
-        let lastError: any = null;
-
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            notesResult = await generateTopicNotes({
-              subject: currentNoteState.subject,
-              topicTitle: topic.title,
-              topicDescription: topic.description,
-              learnerLevel: currentNoteState.learnerLevel,
-              complexity: currentNoteState.complexity,
-              depth: currentNoteState.depth,
-              language: currentNoteState.language,
-              instructions: currentNoteState.instructions,
-            });
-            if (notesResult && Array.isArray(notesResult.blocks) && notesResult.blocks.length > 0) {
-              lastError = null;
-              break;
-            }
-          } catch (e: any) {
-            lastError = e;
-            if (attempt === 0 && !isCancelledRef.current) {
-              console.warn(`[Auto-Retry] First attempt failed for topic "${topic.title}", retrying in 2.5s...`);
-              await new Promise((resolve) => setTimeout(resolve, 2500));
-            } else {
-              throw e;
-            }
-          }
-        }
-
-        if (lastError) throw lastError;
-
-        if (isCancelledRef.current) break;
-
-        // Double check we got valid content blocks
-        if (!notesResult || !Array.isArray(notesResult.blocks) || notesResult.blocks.length === 0) {
-          throw new Error(`AI generated an empty response for topic "${topic.title}".`);
-        }
-
-        // Construct NoteSection
-        const newSection: NoteSection = {
-          id: `sec_${Date.now()}_${i}`,
-          topicId: topic.id,
-          title: topic.title,
-          summary: notesResult.summary,
-          blocks: (notesResult.blocks || []).map((b, bIdx) => ({
-            ...b,
-            id: `b_${Date.now()}_${bIdx}`,
-          })),
-        };
-
-        // Update topic as completed and save incrementally!
-        const completedRoadmap = (currentNoteState.roadmap || []).map((t, idx) =>
-          idx === i ? { ...t, status: "completed" as const, errorMessage: undefined } : t
-        );
-
-        // Check if section already exists (replace or append)
-        const currentSections = currentNoteState.sections || [];
-        const secIdx = currentSections.findIndex((s) => s.topicId === topic.id);
-        const updatedSections = [...currentSections];
-        if (secIdx >= 0) {
-          updatedSections[secIdx] = newSection;
-        } else {
-          updatedSections.push(newSection);
-        }
-
-        currentNoteState = {
-          ...currentNoteState,
-          roadmap: completedRoadmap,
-          sections: updatedSections,
-          updatedAt: new Date().toISOString(),
-        };
-
-        // CRITICAL: Save each successfully generated topic immediately!
-        saveNote(currentNoteState);
-        setNote(currentNoteState);
-
-      } catch (err: any) {
-        console.error(`Failed generating topic "${topic.title}":`, err);
-
-        const failedRoadmap = (currentNoteState.roadmap || []).map((t, idx) =>
-          idx === i ? { ...t, status: "failed" as const, errorMessage: err.message || "Generation error" } : t
-        );
-
-        currentNoteState = {
-          ...currentNoteState,
-          roadmap: failedRoadmap,
-          generationStatus: "failed",
-        };
-
-        saveNote(currentNoteState);
-        setNote(currentNoteState);
-        setErrorMessage(`Generation stopped on Topic ${i + 1} ("${topic.title}"): ${err.message || "API error"}`);
-        setFailedTopicIndex(i);
-        setIsGenerating(false);
-        return;
-      }
+    if (!activeGeneration || activeGeneration.note.id !== initialNote.id) {
+      startGeneration(initialNote, batchSize);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNote.id]);
 
-    if (!isCancelledRef.current) {
-      const allDone = (currentNoteState.roadmap || []).every(
-        (t) => t.status === "completed" || t.status === "skipped"
-      );
-      currentNoteState.generationStatus = allDone ? "completed" : "idle";
-      saveNote(currentNoteState);
-      setNote(currentNoteState);
-      setIsGenerating(false);
-    }
-  };
-
-  const retryTopic = (index: number) => {
-    const resetRoadmap = (note.roadmap || []).map((t, idx) =>
-      idx === index ? { ...t, status: "pending" as const, errorMessage: undefined } : t
-    );
-    const updated = { ...note, roadmap: resetRoadmap };
-    setNote(updated);
-    saveNote(updated);
-    setTimeout(() => {
-      startOrResumeGeneration();
-    }, 100);
-  };
-
-  const skipTopic = (index: number) => {
-    const updatedRoadmap = (note.roadmap || []).map((t, idx) =>
-      idx === index ? { ...t, status: "skipped" as const, errorMessage: undefined } : t
-    );
-    const updated = { ...note, roadmap: updatedRoadmap };
-    setNote(updated);
-    saveNote(updated);
-    setErrorMessage(null);
-    setFailedTopicIndex(null);
-
-    setTimeout(() => {
-      startOrResumeGeneration();
-    }, 100);
-  };
-
-  const skipAllFailed = () => {
-    const updatedRoadmap = (note.roadmap || []).map((t) =>
-      t.status === "failed" ? { ...t, status: "skipped" as const, errorMessage: undefined } : t
-    );
-    const updated = { ...note, roadmap: updatedRoadmap };
-    setNote(updated);
-    saveNote(updated);
-    setErrorMessage(null);
-    setFailedTopicIndex(null);
-
-    setTimeout(() => {
-      startOrResumeGeneration();
-    }, 100);
-  };
+  // Prefer the live context state for this note; fall back to the prop for the first paint
+  // before the context has registered it.
+  const note = activeGeneration && activeGeneration.note.id === initialNote.id ? activeGeneration.note : initialNote;
+  const isThisNoteActive = activeGeneration?.note.id === note.id;
+  const errorMessage = isThisNoteActive ? activeGeneration!.errorMessage : null;
+  const failedTopicIndex = isThisNoteActive ? activeGeneration!.failedTopicIndex : null;
 
   const completedCount = (note.roadmap || []).filter((t) => t.status === "completed").length;
   const skippedCount = (note.roadmap || []).filter((t) => t.status === "skipped").length;
@@ -262,7 +82,7 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
               onClick={onCancel}
               className="px-4 py-2 rounded-xl text-xs font-medium border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              Pause & View Saved Notes
+              View Saved Notes (Keeps Generating)
             </button>
           )}
         </div>
@@ -447,7 +267,7 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
       <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 font-light">
         <div className="flex items-center space-x-2">
           <ShieldCheck className="w-4 h-4 text-zinc-800 dark:text-zinc-200" />
-          <span>Incremental Auto-Save: Completed topics are immediately stored. Failed topics can be retried or skipped anytime.</span>
+          <span>Background Generation: Notes keep generating even if you switch pages — track progress from the status bar in the corner, or come back here anytime.</span>
         </div>
       </div>
     </div>
