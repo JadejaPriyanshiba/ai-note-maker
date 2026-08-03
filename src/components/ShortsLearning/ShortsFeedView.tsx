@@ -449,26 +449,34 @@ export const ShortsFeedView: React.FC<ShortsFeedViewProps> = ({ tree, session, o
         </button>
       </div>
 
-      {budgetReached && !budgetBannerDismissed && (
-        <div className="absolute inset-x-3 sm:inset-x-4 top-14 sm:top-16 z-30 flex items-center justify-between gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur rounded-xl px-3 py-2 shadow-lg">
-          <span className="text-[11px] text-zinc-700 dark:text-zinc-300">
-            Session goal reached (~{sessionState.timeLimitMinutes} min)
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            {completedTitles.length >= TEST_ME_THRESHOLD && (
-              <button
-                onClick={() => onTestMe(testMeTopics())}
-                className="text-[11px] font-medium px-2 py-1 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-              >
-                Test Me
+      <AnimatePresence>
+        {budgetReached && !budgetBannerDismissed && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="absolute inset-x-3 sm:inset-x-4 top-14 sm:top-16 z-30 flex items-center justify-between gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur rounded-xl px-3 py-2 shadow-lg"
+          >
+            <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+              Session goal reached (~{sessionState.timeLimitMinutes} min)
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {completedTitles.length >= TEST_ME_THRESHOLD && (
+                <button
+                  onClick={() => onTestMe(testMeTopics())}
+                  className="text-[11px] font-bold px-2 py-1 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+                >
+                  Test Me
+                </button>
+              )}
+              <button onClick={() => setBudgetBannerDismissed(true)} className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+                <X className="w-3.5 h-3.5" />
               </button>
-            )}
-            <button onClick={() => setBudgetBannerDismissed(true)} className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {currentContent && currentContent.length > 1 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex items-center justify-center gap-1.5">

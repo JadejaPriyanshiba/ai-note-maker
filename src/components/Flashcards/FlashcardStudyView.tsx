@@ -1,23 +1,17 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   RotateCw,
-  CheckCircle2,
-  XCircle,
   HelpCircle,
-  Sparkles,
   ArrowLeft,
-  ChevronDown,
-  ChevronUp,
   ChevronLeft,
   ChevronRight,
   Award,
-  Clock,
-  ThumbsUp,
-  Flame,
   Volume2
 } from "lucide-react";
 import { Flashcard, FlashcardDeck } from "../../types";
 import { recordCardReview } from "../../lib/storage";
+import { fadeInUp, scaleIn } from "../../lib/motion";
 
 interface FlashcardStudyViewProps {
   deckTitle: string;
@@ -143,7 +137,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
         <p className="text-sm font-bold text-zinc-600 dark:text-zinc-400">No cards to study in this deck.</p>
         <button
           onClick={onBack}
-          className="px-4 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold"
+          className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-colors"
         >
           Return to Deck
         </button>
@@ -157,7 +151,12 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
     const percentage = Math.round((mastered / total) * 100);
 
     return (
-      <div className="max-w-md mx-auto px-4 py-12 space-y-6 text-center animate-in fade-in duration-300">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="max-w-md mx-auto px-4 py-12 space-y-6 text-center"
+      >
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-xl space-y-6">
           <div className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto text-zinc-900 dark:text-white">
             <Award className="w-8 h-8" />
@@ -201,19 +200,19 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
                 setIsCompleted(false);
                 setSessionResults({ againCount: 0, hardCount: 0, goodCount: 0, easyCount: 0 });
               }}
-              className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold"
+              className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold transition-colors"
             >
               Study Deck Again
             </button>
             <button
               onClick={onBack}
-              className="w-full py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="w-full py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               Return to Library
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -223,7 +222,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           onClick={onBack}
-          className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+          className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Exit Session</span>
@@ -304,9 +303,13 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
 
       {/* 3D Flip Flashcard Container */}
       <div className="perspective-1000 min-h-[320px] relative">
-        <div
+        <motion.div
+          key={currentCard.id || currentIndex}
+          variants={scaleIn}
+          initial="hidden"
+          animate="show"
           onClick={() => setIsFlipped((prev) => !prev)}
-          className={`w-full min-h-[320px] rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 p-8 shadow-xl transition-all duration-500 transform cursor-pointer flex flex-col justify-between select-none ${
+          className={`w-full min-h-[320px] rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 p-8 shadow-xl transition-colors duration-300 cursor-pointer flex flex-col justify-between select-none ${
             isFlipped ? "border-zinc-400 dark:border-zinc-600 shadow-2xl" : ""
           }`}
         >
@@ -321,7 +324,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
                   e.stopPropagation();
                   speakText(isFlipped ? currentCard.back : currentCard.front);
                 }}
-                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors"
                 title="Read aloud"
               >
                 <Volume2 className="w-4 h-4" />
@@ -382,59 +385,61 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
             <RotateCw className="w-3.5 h-3.5" />
             <span>Click card or press Space to {isFlipped ? "flip back" : "reveal answer"}</span>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Rating Buttons (Available when card is flipped) */}
-      {isFlipped ? (
-        <div className="space-y-2 animate-in fade-in duration-200">
-          <p className="text-center text-xs font-bold text-zinc-500 uppercase tracking-wider">
-            How well did you know this? (Keys 1 - 4)
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <button
-              onClick={() => handleRate("again")}
-              className="p-3 rounded-2xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
-            >
-              <span>1. Again</span>
-              <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">&lt; 15 mins</span>
-            </button>
+      <AnimatePresence mode="wait">
+        {isFlipped ? (
+          <motion.div key="rating" variants={fadeInUp} initial="hidden" animate="show" className="space-y-2">
+            <p className="text-center text-xs font-bold text-zinc-500 uppercase tracking-wider">
+              How well did you know this? (Keys 1 - 4)
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <button
+                onClick={() => handleRate("again")}
+                className="p-3 rounded-2xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
+              >
+                <span>1. Again</span>
+                <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">&lt; 15 mins</span>
+              </button>
 
-            <button
-              onClick={() => handleRate("hard")}
-              className="p-3 rounded-2xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
-            >
-              <span>2. Hard</span>
-              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">1 day</span>
-            </button>
+              <button
+                onClick={() => handleRate("hard")}
+                className="p-3 rounded-2xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
+              >
+                <span>2. Hard</span>
+                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">1 day</span>
+              </button>
 
-            <button
-              onClick={() => handleRate("good")}
-              className="p-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
-            >
-              <span>3. Good</span>
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">3 days</span>
-            </button>
+              <button
+                onClick={() => handleRate("good")}
+                className="p-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
+              >
+                <span>3. Good</span>
+                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">3 days</span>
+              </button>
 
+              <button
+                onClick={() => handleRate("easy")}
+                className="p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
+              >
+                <span>4. Easy</span>
+                <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">7 days</span>
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="show-answer" variants={fadeInUp} initial="hidden" animate="show" className="text-center py-2">
             <button
-              onClick={() => handleRate("easy")}
-              className="p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 font-bold text-xs flex flex-col items-center justify-center space-y-0.5 transition-all"
+              onClick={() => setIsFlipped(true)}
+              className="px-6 py-2.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold shadow-xs transition-colors"
             >
-              <span>4. Easy</span>
-              <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">7 days</span>
+              Show Answer
             </button>
-          </div>
-        </div>
-      ) : (
-        <div className="text-center py-2">
-          <button
-            onClick={() => setIsFlipped(true)}
-            className="px-6 py-2.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold shadow-xs"
-          >
-            Show Answer
-          </button>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

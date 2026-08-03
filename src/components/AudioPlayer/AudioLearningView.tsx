@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { NoteDocument } from "../../types";
 import { PodcastPlayer } from "./PodcastPlayer";
+import { fadeInUp } from "../../lib/motion";
 import {
   Play, Pause, Square, SkipBack, SkipForward, ShieldAlert,
   Car, Radio, ArrowLeft
@@ -114,15 +116,23 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
     }
   };
 
+  const sectionProgressPercent =
+    sectionsList.length > 0 ? Math.round(((activeSectionIndex + 1) / sectionsList.length) * 100) : 0;
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800"
+      >
         <div className="flex items-center space-x-3">
           <button
             type="button"
             onClick={onBack}
-            className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+            className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
             title="Back to Note"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -131,7 +141,7 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
             <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
               Audio Learning Studio
             </span>
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
+            <h1 className="text-xl font-extrabold tracking-tight text-zinc-900 dark:text-white mt-0.5">
               {note.title}
             </h1>
           </div>
@@ -169,175 +179,213 @@ export const AudioLearningView: React.FC<AudioLearningViewProps> = ({ note, onBa
             <span>AI Podcast</span>
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Safety Banner */}
-      <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-700 dark:text-zinc-300 flex items-center space-x-3 text-xs">
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
+        className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-700 dark:text-zinc-300 flex items-center space-x-3 text-xs"
+      >
         <ShieldAlert className="w-4 h-4 shrink-0 text-zinc-500" />
         <span>
           <strong>Hands-Free Audio:</strong> Designed for clear listening during study, commutes, or workouts.
         </span>
-      </div>
+      </motion.div>
 
-      {/* FOCUS / DRIVING MODE */}
-      {activeTab === "focus" ? (
-        <div className="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl p-8 sm:p-12 text-center space-y-8 shadow-sm">
-          <div className="space-y-2">
-            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-zinc-800 text-zinc-200 dark:bg-zinc-200 dark:text-zinc-800">
-              Focus / Driving Mode
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold line-clamp-2">
-              {currentSection?.title || note.title}
-            </h2>
-            <p className="text-xs opacity-70">
-              Section {activeSectionIndex + 1} of {sectionsList.length}
-            </p>
-          </div>
+      <AnimatePresence mode="wait">
+        {activeTab === "focus" ? (
+          /* FOCUS / DRIVING MODE */
+          <motion.div
+            key="focus"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl p-8 sm:p-12 text-center space-y-8 shadow-sm"
+          >
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-zinc-800 text-zinc-200 dark:bg-zinc-200 dark:text-zinc-800">
+                Focus / Driving Mode
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold line-clamp-2">
+                {currentSection?.title || note.title}
+              </h2>
+              <p className="text-xs opacity-70">
+                Section {activeSectionIndex + 1} of {sectionsList.length}
+              </p>
+            </div>
 
-          {/* Large Play/Pause Control Button */}
-          <div className="flex items-center justify-center space-x-6 py-6">
-            <button
-              type="button"
-              onClick={handlePrevSection}
-              disabled={activeSectionIndex === 0}
-              className="w-16 h-16 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 hover:opacity-80 flex items-center justify-center disabled:opacity-30"
-              title="Previous Section"
-            >
-              <SkipBack className="w-8 h-8" />
-            </button>
-
-            <button
-              type="button"
-              onClick={isPlaying ? handlePause : handlePlay}
-              className="w-24 h-24 rounded-full bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
-            >
-              {isPlaying ? <Pause className="w-10 h-10" /> : <Play className="w-10 h-10 ml-1" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleNextSection}
-              disabled={activeSectionIndex === sectionsList.length - 1}
-              className="w-16 h-16 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 hover:opacity-80 flex items-center justify-center disabled:opacity-30"
-              title="Next Section"
-            >
-              <SkipForward className="w-8 h-8" />
-            </button>
-          </div>
-
-          {/* Speed Indicator */}
-          <div className="flex items-center justify-center space-x-2 pt-4 border-t border-zinc-800 dark:border-zinc-200">
-            <span className="text-xs opacity-70 mr-2">Speed:</span>
-            {[0.75, 1, 1.25, 1.5, 2].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setPlaybackSpeed(s)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                  playbackSpeed === s
-                    ? "bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white"
-                    : "bg-zinc-800 text-zinc-300 dark:bg-zinc-200 dark:text-zinc-700"
-                }`}
-              >
-                {s}x
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : activeTab === "podcast" ? (
-        /* AI PODCAST MODE */
-        <PodcastPlayer note={note} />
-      ) : (
-        /* STANDARD PLAYER */
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-6 shadow-sm">
-          {/* Active Section Info */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-              Section {activeSectionIndex + 1} of {sectionsList.length}
-            </span>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-              {currentSection?.title}
-            </h2>
-            <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-3">
-              {currentSection?.summary || currentSection?.blocks?.[0]?.content}
-            </p>
-          </div>
-
-          {/* Controls Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
-            <div className="flex items-center space-x-3">
+            {/* Large Play/Pause Control Button */}
+            <div className="flex items-center justify-center space-x-6 py-6">
               <button
                 type="button"
                 onClick={handlePrevSection}
                 disabled={activeSectionIndex === 0}
-                className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-30"
+                className="w-16 h-16 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 hover:opacity-80 flex items-center justify-center disabled:opacity-30 transition-opacity"
+                title="Previous Section"
               >
-                <SkipBack className="w-5 h-5" />
+                <SkipBack className="w-8 h-8" />
               </button>
 
               <button
                 type="button"
                 onClick={isPlaying ? handlePause : handlePlay}
-                className="w-12 h-12 rounded-full bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center shadow-sm"
+                className="w-24 h-24 rounded-full bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
               >
-                {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleStop}
-                className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              >
-                <Square className="w-5 h-5" />
+                {isPlaying ? <Pause className="w-10 h-10" /> : <Play className="w-10 h-10 ml-1" />}
               </button>
 
               <button
                 type="button"
                 onClick={handleNextSection}
                 disabled={activeSectionIndex === sectionsList.length - 1}
-                className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-30"
+                className="w-16 h-16 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 hover:opacity-80 flex items-center justify-center disabled:opacity-30 transition-opacity"
+                title="Next Section"
               >
-                <SkipForward className="w-5 h-5" />
+                <SkipForward className="w-8 h-8" />
               </button>
             </div>
 
-            {/* Speed & Voice Options */}
-            <div className="flex items-center space-x-4 text-xs">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-zinc-500 font-medium">Speed:</span>
-                <select
-                  value={playbackSpeed}
-                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 text-zinc-900 dark:text-zinc-100 font-medium"
+            {/* Speed Indicator */}
+            <div className="flex items-center justify-center space-x-2 pt-4 border-t border-zinc-800 dark:border-zinc-200">
+              <span className="text-xs opacity-70 mr-2">Speed:</span>
+              {[0.75, 1, 1.25, 1.5, 2].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setPlaybackSpeed(s)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                    playbackSpeed === s
+                      ? "bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white"
+                      : "bg-zinc-800 text-zinc-300 dark:bg-zinc-200 dark:text-zinc-700"
+                  }`}
                 >
-                  <option value={0.75}>0.75x</option>
-                  <option value={1}>1.0x</option>
-                  <option value={1.25}>1.25x</option>
-                  <option value={1.5}>1.5x</option>
-                  <option value={2}>2.0x</option>
-                </select>
+                  {s}x
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        ) : activeTab === "podcast" ? (
+          /* AI PODCAST MODE */
+          <motion.div
+            key="podcast"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <PodcastPlayer note={note} />
+          </motion.div>
+        ) : (
+          /* STANDARD PLAYER */
+          <motion.div
+            key="standard"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-6 shadow-sm"
+          >
+            {/* Active Section Info */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold uppercase tracking-wider text-zinc-500">
+                  Section {activeSectionIndex + 1} of {sectionsList.length}
+                </span>
+                <span className="font-bold text-zinc-600 dark:text-zinc-300">{sectionProgressPercent}%</span>
+              </div>
+              <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-[width] duration-500"
+                  style={{ width: `${sectionProgressPercent}%` }}
+                />
+              </div>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 pt-1">
+                {currentSection?.title}
+              </h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-3">
+                {currentSection?.summary || currentSection?.blocks?.[0]?.content}
+              </p>
+            </div>
+
+            {/* Controls Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={handlePrevSection}
+                  disabled={activeSectionIndex === 0}
+                  className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-30 transition-colors"
+                >
+                  <SkipBack className="w-5 h-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={isPlaying ? handlePause : handlePlay}
+                  className="w-12 h-12 rounded-full bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center shadow-sm transition-colors"
+                >
+                  {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStop}
+                  className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  <Square className="w-5 h-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleNextSection}
+                  disabled={activeSectionIndex === sectionsList.length - 1}
+                  className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-30 transition-colors"
+                >
+                  <SkipForward className="w-5 h-5" />
+                </button>
               </div>
 
-              {voices.length > 0 && (
+              {/* Speed & Voice Options */}
+              <div className="flex items-center space-x-4 text-xs">
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-zinc-500 font-medium">Voice:</span>
+                  <span className="text-zinc-500 font-bold">Speed:</span>
                   <select
-                    value={selectedVoiceIndex}
-                    onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
-                    className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 text-zinc-900 dark:text-zinc-100 max-w-[150px] truncate font-medium"
+                    value={playbackSpeed}
+                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                    className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg px-2 py-1 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                   >
-                    {voices.map((v, i) => (
-                      <option key={i} value={i}>
-                        {v.name} ({v.lang})
-                      </option>
-                    ))}
+                    <option value={0.75}>0.75x</option>
+                    <option value={1}>1.0x</option>
+                    <option value={1.25}>1.25x</option>
+                    <option value={1.5}>1.5x</option>
+                    <option value={2}>2.0x</option>
                   </select>
                 </div>
-              )}
+
+                {voices.length > 0 && (
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-zinc-500 font-bold">Voice:</span>
+                    <select
+                      value={selectedVoiceIndex}
+                      onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
+                      className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg px-2 py-1 text-zinc-900 dark:text-zinc-100 max-w-[150px] truncate font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                    >
+                      {voices.map((v, i) => (
+                        <option key={i} value={i}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

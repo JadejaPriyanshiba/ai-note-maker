@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Layers,
   Plus,
   Trash2,
   Edit3,
-  Save,
   ArrowLeft,
   Sparkles,
   Download,
   Upload,
-  Check,
   Folder,
   X,
-  FileText
 } from "lucide-react";
 import { FlashcardDeck, Flashcard, Collection } from "../../types";
 import {
@@ -26,6 +24,8 @@ import {
 } from "../../lib/storage";
 import { CollectionSelectorModal } from "../Collections/CollectionSelectorModal";
 import { ConfirmModal } from "../ConfirmModal";
+import { EmptyState } from "../EmptyState";
+import { fadeInUp, staggerContainer, scaleIn } from "../../lib/motion";
 
 interface FlashcardEditorViewProps {
   deck: FlashcardDeck;
@@ -226,10 +226,10 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       {/* Top Header Navigation */}
-      <div className="flex items-center justify-between">
+      <motion.div variants={fadeInUp} initial="hidden" animate="show" className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+          className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Library</span>
@@ -238,7 +238,7 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowDeckDeleteConfirm(true)}
-            className="px-3 py-1.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/60 flex items-center space-x-1"
+            className="px-3 py-1.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/60 flex items-center space-x-1 transition-colors"
             title="Delete this deck and all cards"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -247,13 +247,13 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
 
           <button
             onClick={handleExportJSON}
-            className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1"
+            className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export JSON</span>
           </button>
 
-          <label className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1 cursor-pointer">
+          <label className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center space-x-1 cursor-pointer transition-colors">
             <Upload className="w-3.5 h-3.5" />
             <span>Import JSON</span>
             <input type="file" accept=".json" onChange={handleImportJSON} className="hidden" />
@@ -262,16 +262,16 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
           <button
             onClick={() => onStudyDeck(currentDeck)}
             disabled={cards.length === 0}
-            className="px-4 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 shadow-xs disabled:opacity-50"
+            className="px-4 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 shadow-xs disabled:opacity-50 transition-colors"
           >
             <Layers className="w-4 h-4" />
             <span>Study Deck ({cards.length})</span>
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Deck Overview & Settings Card */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm space-y-4">
+      <motion.div variants={fadeInUp} initial="hidden" animate="show" className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-3 flex-1">
             <div className="flex items-center space-x-2">
@@ -309,13 +309,13 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
 
           <button
             onClick={() => onOpenAIGenerator(currentDeck)}
-            className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-bold flex items-center space-x-2 shrink-0 shadow-xs"
+            className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-bold flex items-center space-x-2 shrink-0 shadow-xs transition-colors"
           >
             <Sparkles className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
             <span>+ Generate Cards with AI</span>
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Cards List Toolbar */}
       <div className="flex items-center justify-between">
@@ -324,7 +324,7 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
         </h3>
         <button
           onClick={handleOpenAddCard}
-          className="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 shadow-xs"
+          className="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span>Add Card Manually</span>
@@ -332,8 +332,15 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
       </div>
 
       {/* Add / Edit Single Card Drawer/Form */}
-      {isEditingCard && (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-3xl p-6 shadow-xl space-y-4 animate-in fade-in duration-200">
+      <AnimatePresence>
+        {isEditingCard && (
+          <motion.div
+            variants={scaleIn}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-3xl p-6 shadow-xl space-y-4"
+          >
           <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
             <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
               {editingCardId ? "Edit Flashcard" : "New Flashcard"}
@@ -418,7 +425,7 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
           <div className="flex items-center justify-end space-x-2 pt-2">
             <button
               onClick={() => setIsEditingCard(false)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               Cancel
             </button>
@@ -426,7 +433,7 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
               <button
                 onClick={() => handleSaveCard(true)}
                 disabled={!cardFront.trim() || !cardBack.trim()}
-                className="px-3.5 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
               >
                 Save & Add Another
               </button>
@@ -434,37 +441,30 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
             <button
               onClick={() => handleSaveCard(false)}
               disabled={!cardFront.trim() || !cardBack.trim()}
-              className="px-4 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold disabled:opacity-50"
+              className="px-4 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold disabled:opacity-50 transition-colors"
             >
               Save Card
             </button>
           </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Cards List Grid */}
       {cards.length === 0 ? (
-        <div className="p-12 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 space-y-3">
-          <Layers className="w-8 h-8 text-zinc-400 mx-auto" />
-          <h4 className="text-sm font-bold text-zinc-900 dark:text-white">This deck is empty</h4>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            Add cards manually or generate flashcards instantly using AI from your notes.
-          </p>
-          <div className="pt-2 flex justify-center space-x-2">
-            <button
-              onClick={handleOpenAddCard}
-              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold"
-            >
-              + Add First Card
-            </button>
-          </div>
-        </div>
+        <EmptyState
+          icon={Layers}
+          title="This deck is empty"
+          message="Add cards manually or generate flashcards instantly using AI from your notes."
+          action={{ label: "+ Add First Card", onClick: handleOpenAddCard }}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-3">
+        <motion.div variants={staggerContainer()} initial="hidden" animate="show" className="grid grid-cols-1 gap-3">
           {cards.map((c, idx) => (
-            <div
+            <motion.div
               key={c.id}
-              className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+              variants={fadeInUp}
+              className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
             >
               <div className="space-y-1.5 flex-1">
                 <div className="flex items-center space-x-2">
@@ -500,20 +500,20 @@ export const FlashcardEditorView: React.FC<FlashcardEditorViewProps> = ({
               <div className="flex items-center space-x-1 shrink-0 self-end sm:self-center">
                 <button
                   onClick={() => handleEditCard(c)}
-                  className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg"
+                  className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg transition-colors"
                 >
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDeleteCard(c.id)}
-                  className="p-1.5 text-zinc-400 hover:text-red-600 rounded-lg"
+                  className="p-1.5 text-zinc-400 hover:text-red-600 rounded-lg transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
       {/* Move Deck Folder Modal */}
