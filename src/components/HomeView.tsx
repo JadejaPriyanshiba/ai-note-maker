@@ -5,6 +5,7 @@ import { LearnerLevel, Complexity, Depth, NoteLanguage, NoteDocument } from "../
 import { generateRoadmap } from "../lib/aiService";
 import { getSavedNotes, getCommunityNotes, getTestAttempts, getFlashcardDecks } from "../lib/storage";
 import { EmptyState } from "./EmptyState";
+import { IntakeWizard } from "./Intake/IntakeWizard";
 import {
   BookOpen,
   AlertTriangle,
@@ -18,6 +19,7 @@ import {
   CheckCircle2,
   TrendingUp,
   PlayCircle,
+  Sparkles,
 } from "lucide-react";
 
 interface HomeViewProps {
@@ -65,6 +67,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const [instructions, setInstructions] = useState<string>("");
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState<boolean>(false);
+  const [showIntakeWizard, setShowIntakeWizard] = useState<boolean>(false);
 
   const savedNotes = getSavedNotes();
   const communityNotes = getCommunityNotes();
@@ -205,7 +208,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </button>
           </div>
 
-          <div className="flex justify-center">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
@@ -214,6 +217,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>{showAdvanced ? "Hide" : "Customize"} level, depth &amp; language</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+            </button>
+            <span className="text-zinc-300 dark:text-zinc-700 text-xs">or</span>
+            <button
+              type="button"
+              onClick={() => setShowIntakeWizard(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors py-1"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Import from PDFs, links &amp; notes</span>
             </button>
           </div>
 
@@ -558,6 +570,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
           />
         )}
       </div>
+
+      <IntakeWizard
+        isOpen={showIntakeWizard}
+        onClose={() => setShowIntakeWizard(false)}
+        onStartRoadmap={onStartRoadmap}
+      />
     </div>
   );
 };

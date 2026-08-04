@@ -30,6 +30,7 @@ import {
   TeachBackEvaluation,
   RevisionPlan,
   PodcastEpisode,
+  KnowledgeSource,
 } from "../types";
 
 export interface UserProfile {
@@ -817,5 +818,42 @@ export async function deleteRevisionResourceFromCloud(id: string): Promise<void>
     await deleteDoc(doc(db, "revision_resources", id));
   } catch (err) {
     console.error("Error deleting revision resource from cloud:", err);
+  }
+}
+
+// ==================== KNOWLEDGE SOURCES (Knowledge Intake pipeline) ==================== //
+
+export async function fetchUserKnowledgeSourcesFromCloud(userId: string): Promise<KnowledgeSource[]> {
+  try {
+    const q = query(collection(db, "knowledge_sources"), where("ownerId", "==", userId));
+    const snap = await getDocs(q);
+    const list: KnowledgeSource[] = [];
+    snap.forEach((docSnap) => {
+      list.push(deserializeFromFirestore(docSnap.data()) as KnowledgeSource);
+    });
+    return list.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  } catch (err) {
+    console.error("Error fetching knowledge sources from cloud:", err);
+    return [];
+  }
+}
+
+export async function saveKnowledgeSourceToCloud(source: KnowledgeSource, userId: string): Promise<boolean> {
+  try {
+    const ref = doc(db, "knowledge_sources", source.id);
+    const payload = sanitizeForFirestore({ ...source, ownerId: userId });
+    await setDoc(ref, payload);
+    return true;
+  } catch (err) {
+    console.error("Error saving knowledge source to cloud:", err);
+    return false;
+  }
+}
+
+export async function deleteKnowledgeSourceFromCloud(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "knowledge_sources", id));
+  } catch (err) {
+    console.error("Error deleting knowledge source from cloud:", err);
   }
 }

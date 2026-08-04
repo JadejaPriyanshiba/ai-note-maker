@@ -21,17 +21,25 @@ export interface RoadmapTopic {
   errorMessage?: string;
 }
 
-export type BlockType = 
-  | 'heading' 
-  | 'paragraph' 
-  | 'bullet_list' 
-  | 'numbered_list' 
-  | 'checklist' 
-  | 'quote' 
-  | 'callout' 
-  | 'code' 
-  | 'table' 
-  | 'student_tag';
+export type BlockType =
+  | 'heading'
+  | 'paragraph'
+  | 'bullet_list'
+  | 'numbered_list'
+  | 'checklist'
+  | 'quote'
+  | 'callout'
+  | 'code'
+  | 'table'
+  | 'student_tag'
+  | 'image_gallery';
+
+export interface NoteBlockImage {
+  url: string;
+  thumbnailUrl?: string;
+  title?: string;
+  sourceUrl?: string; // page the image was found on, for attribution/click-through
+}
 
 export type StudentTagType = 'important' | 'remember' | 'doubt' | 'example' | 'exam_point';
 
@@ -45,6 +53,7 @@ export interface NoteBlock {
   tagType?: StudentTagType;
   tableData?: string[][]; // for tables
   language?: string; // for code blocks
+  images?: NoteBlockImage[]; // for image_gallery — reference images/diagrams for the topic
 }
 
 export interface NoteSection {
@@ -501,5 +510,29 @@ export interface SavedLearningResource {
   savedAt: string;
   userNotes?: string;
   timestampNotes?: { time: string; note: string }[];
+}
+
+// ==========================================
+// KNOWLEDGE INTAKE PIPELINE
+// ==========================================
+
+export type KnowledgeSourceType = 'pdf' | 'web' | 'youtube' | 'text';
+
+// A user-saved reference to a source they fed into the Knowledge Intake wizard, so it can be
+// reused in a future intake session without re-uploading/re-fetching. Only the compressed brief
+// is persisted — never the raw extracted text — to stay well under Firestore's 1MB document
+// limit and because the brief is what generation actually consumes.
+export interface KnowledgeSource {
+  id: string;
+  ownerId?: string;
+  sourceType: KnowledgeSourceType;
+  title: string;
+  originUrl?: string; // for 'web' / 'youtube'
+  fileName?: string; // for 'pdf'
+  brief: string; // compressed, structured summary (bullet facts/terminology), token-budgeted
+  wordCount: number; // of the original extracted text, before compression
+  contentHash: string; // hash of normalized extracted text, for de-dup on re-import
+  createdAt: string;
+  updatedAt: string;
 }
 

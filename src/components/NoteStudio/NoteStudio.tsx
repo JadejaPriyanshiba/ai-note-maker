@@ -4,6 +4,7 @@ import { fadeInUp } from "../../lib/motion";
 import { NoteDocument, NoteSection, NoteBlock, StudentTagType, NoteVersion } from "../../types";
 import { saveNote, deleteNote, publishCommunityNote, remixCommunityNote } from "../../lib/storage";
 import { selectionAction } from "../../lib/aiService";
+import { searchTopicImages } from "../../lib/imageSearchService";
 import { CollectionSelectorModal } from "../Collections/CollectionSelectorModal";
 import { AIFlashcardGeneratorModal } from "../Flashcards/AIFlashcardGeneratorModal";
 import { PublishModal } from "../Community/PublishModal";
@@ -80,6 +81,7 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
+  const [refreshingImageBlockId, setRefreshingImageBlockId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -179,6 +181,19 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
       };
     });
     handleUpdateNote({ ...note, sections: updatedSections });
+  };
+
+  const handleRefreshImages = async (blockId: string) => {
+    if (!activeSection) return;
+    setRefreshingImageBlockId(blockId);
+    try {
+      const images = await searchTopicImages(`${activeSection.title} ${note.subject} diagram`, 3);
+      handleUpdateBlock(blockId, { images });
+    } catch (err: any) {
+      alert("Failed to refresh images: " + (err.message || "Please try again."));
+    } finally {
+      setRefreshingImageBlockId(null);
+    }
   };
 
   const handleDeleteBlock = (blockId: string) => {
@@ -346,6 +361,11 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
             txt += `[${(b.tagType || "NOTE").toUpperCase()}]: ${b.content}\n\n`;
           } else if (b.type === "code") {
             txt += `\`\`\`${b.language || ""}\n${b.content}\n\`\`\`\n\n`;
+          } else if (b.type === "image_gallery") {
+            (b.images || []).forEach((img) => {
+              txt += `[Image] ${img.title || "Reference image"}: ${img.sourceUrl || img.url}\n`;
+            });
+            txt += `\n`;
           }
         });
         txt += `---\n\n`;
@@ -458,6 +478,26 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                 <span>SOURCE CODE</span>
               </div>
               <pre style="margin:0; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-all; font-family:inherit; color:#f4f4f5;"><code>${escapeHtml(block.content)}</code></pre>
+            </div>
+          `;
+        } else if (block.type === "image_gallery" && (block.images || []).length > 0) {
+          const imagesHTML = (block.images || [])
+            .map(
+              (img) => `
+                <a href="${escapeHtml(img.sourceUrl || img.url)}" target="_blank" rel="noopener noreferrer" style="display:block; border-radius:12px; overflow:hidden; border:1px solid #d4d4d8; aspect-ratio:16/9; background-color:#f4f4f5;">
+                  <img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.title || "Reference image")}" referrerpolicy="no-referrer" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="${
+                img.thumbnailUrl
+                  ? `this.onerror=null;this.src='${escapeHtml(img.thumbnailUrl)}';`
+                  : `this.style.visibility='hidden';`
+              }" />
+                </a>
+              `
+            )
+            .join("");
+          blocksHTML += `
+            <div style="margin:18px 0; page-break-inside:avoid; break-inside:avoid;">
+              <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#71717a; margin-bottom:10px;">Reference Images</div>
+              <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">${imagesHTML}</div>
             </div>
           `;
         }
@@ -1224,6 +1264,57 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                       </div>
                     )}
 
+                    {/* Reference Images */}
+                    {block.type === "image_gallery" && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                            Reference Images
+                          </p>
+                          {!isReadOnlyState && (
+                            <button
+                              type="button"
+                              onClick={() => handleRefreshImages(block.id)}
+                              disabled={refreshingImageBlockId === block.id}
+                              className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-40 transition-colors"
+                              title="Find different images"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${refreshingImageBlockId === block.id ? "animate-spin" : ""}`} />
+                            </button>
+                          )}
+                        </div>
+                        {(block.images || []).length > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {(block.images || []).map((img, idx) => (
+                              <a
+                                key={idx}
+                                href={img.sourceUrl || img.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={img.title}
+                                className="group block rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 aspect-video"
+                              >
+                                <img
+                                  src={img.url}
+                                  alt={img.title || "Reference image"}
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    if (img.thumbnailUrl && target.src !== img.thumbnailUrl) target.src = img.thumbnailUrl;
+                                    else target.style.visibility = "hidden";
+                                  }}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-400 italic">No images found for this topic.</p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Block Delete Action */}
                     {!isReadOnlyState && (
                       <button
@@ -1699,6 +1790,39 @@ export const NoteStudio: React.FC<NoteStudioProps> = ({
                                 })}
                               </tbody>
                             </table>
+                          </div>
+                        )}
+
+                        {block.type === "image_gallery" && (block.images || []).length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                              Reference Images
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {(block.images || []).map((img, idx) => (
+                                <a
+                                  key={idx}
+                                  href={img.sourceUrl || img.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={img.title}
+                                  className="group block rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 aspect-video"
+                                >
+                                  <img
+                                    src={img.url}
+                                    alt={img.title || "Reference image"}
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      const target = e.currentTarget;
+                                      if (img.thumbnailUrl && target.src !== img.thumbnailUrl) target.src = img.thumbnailUrl;
+                                      else target.style.visibility = "hidden";
+                                    }}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                  />
+                                </a>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

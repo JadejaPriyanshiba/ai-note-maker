@@ -110,6 +110,36 @@ Regenerates 4–6 fresh YouTube search keyword phrases for a single learning-tre
 - **Body:** `{ nodeTitle, nodeDescription?, existingKeywords? }` — existing keywords are passed so the model avoids repeating them
 - **Response:** `{ success: true, keywords: string[] }`
 
+## `POST /api/intake/fetch-url`
+
+Deterministic (non-AI) source extraction for the Knowledge Intake pipeline (see `src/lib/intake/`). Not a Gemini route — exempt from BYOK, but still resolves a Gemini-free result.
+
+- **Body:** `{ url: string }`
+- **Response:** `{ success: true, sourceType: 'web' | 'youtube', title, text, originUrl, cached?: true }`
+- **Behavior:**
+  - Web URLs: fetched server-side (SSRF-guarded — http/https only, loopback/private/link-local hosts blocked, DNS-resolution checked, size/time/redirect capped) and passed through `@mozilla/readability` + `jsdom` for boilerplate-free article text.
+  - YouTube URLs: metadata only (title/channel/description/tags) via the same official Data API v3 already used by `/api/youtube/search` — no transcript, since there's no official-API path for third-party video transcripts and this project doesn't scrape. Requires `YOUTUBE_API_KEY`.
+  - Results are cached server-side per URL for 1 hour.
+
+## `POST /api/ai/intake-brief`
+
+The single LLM call in the Knowledge Intake pipeline. Distills a natural-language request plus already-extracted, already-retrieval-filtered source excerpts (chunked and BM25-ranked client-side in `src/lib/intake/`, never raw source dumps) into a generation brief. The output reuses the exact `RoadmapTopic` shape used elsewhere, so it plugs directly into the existing roadmap-approval flow with no changes to `RoadmapEditor`, `GenerationContext`, or `/api/ai/topic-notes`.
+
+- **Body:** `{ prompt, sources: { title, sourceType, chunks: { heading?, text }[] }[], learnerLevel?, complexity?, depth?, language?, priorQuestions?, priorAnswers? }`
+- **Response:** `{ success: true, brief: { subject, mainTopic?, learnerLevel, complexity, depth, language, instructions, topics: {title, description, estimatedMinutes?}[], confidence, clarifyingQuestions: string[] } }`
+- `clarifyingQuestions` is capped at 2 server-side regardless of what the model returns. The client only surfaces them when `confidence < 70` and it's the first call (i.e. `priorQuestions` wasn't already sent) — once answered, the client re-calls this route with `priorQuestions`/`priorAnswers` and proceeds unconditionally on the second response, so a user is never asked more than once.
+
+## `POST /api/images/search`
+
+Server-side proxy to Google's official Custom Search JSON API (`searchType=image`), used to fetch 2-3 reference images/diagrams appended to the end of each generated note topic. Not a Gemini route — exempt from BYOK. Requires `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` (a Programmable Search Engine with Image Search enabled) — returns `500` with a clear message if either is unset.
+
+- **Body:** `{ query: string, count?: number (1-6, default 3) }`
+- **Response:** `{ success: true, images: { url, thumbnailUrl?, title?, sourceUrl? }[], cached?: true }`
+- **Behavior:**
+  - Results are cached server-side per `query + count` for 24 hours (reference images don't go stale the way YouTube search results do).
+  - Returns `429` specifically on Google API quota/permission errors (HTTP 403/429), matching the `/api/youtube/search` convention.
+  - `GenerationContext.tsx` calls this once per topic after `/api/ai/topic-notes` succeeds and appends the result as an `image_gallery`-type `NoteBlock` — this is deterministic post-processing, not part of the AI's JSON output, so it's not in `topic-notes`'s `responseSchema`. A failure here is swallowed (logged, not surfaced) and never fails the topic itself.
+
 ## `POST /api/youtube/search`
 
 Server-side proxy to the YouTube Data API v3 (official API only, no scraping), used for both Shorts Learning content discovery and the revision feed. Requires `YOUTUBE_API_KEY` to be set — returns `500` with a clear message if it isn't.

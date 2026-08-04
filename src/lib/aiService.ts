@@ -1,5 +1,6 @@
 import { getAISettings, incrementAIRequestCount } from "./storage";
 import { LearnerLevel, Complexity, Depth, NoteLanguage, QuestionType, Question, PodcastTurn } from "../types";
+import { AssembledSource } from "./intake/assemble";
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -45,6 +46,46 @@ export async function generateRoadmap(params: {
     throw new Error(data.error || "Failed to generate study roadmap");
   }
   return data.roadmap as { title: string; description: string; estimatedMinutes?: number }[];
+}
+
+export interface IntakeBrief {
+  subject: string;
+  mainTopic?: string;
+  learnerLevel: LearnerLevel;
+  complexity: Complexity;
+  depth: Depth;
+  language: NoteLanguage;
+  instructions: string;
+  topics: { title: string; description: string; estimatedMinutes?: number }[];
+  confidence: number;
+  clarifyingQuestions: string[];
+}
+
+// The single LLM call in the Knowledge Intake pipeline. Everything upstream (extraction,
+// chunking, BM25 retrieval, confidence scoring) is deterministic and already done client-side by
+// the time this is called — `sources` here is already the token-budgeted, retrieval-filtered
+// context, not raw source dumps.
+export async function generateIntakeBrief(params: {
+  prompt: string;
+  sources: AssembledSource[];
+  learnerLevel?: LearnerLevel;
+  complexity?: Complexity;
+  depth?: Depth;
+  language?: NoteLanguage;
+  priorQuestions?: string[];
+  priorAnswers?: string[];
+}) {
+  incrementAIRequestCount();
+  const res = await fetch("/api/ai/intake-brief", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.error || "Failed to analyze your request and sources");
+  }
+  return data.brief as IntakeBrief;
 }
 
 export async function suggestTopics(subject: string, existingTopics: string[]) {

@@ -24,6 +24,7 @@ Fill in `.env`:
 |---|---|---|
 | `GEMINI_API_KEY` | Yes | Server-side Gemini access for all `/api/ai/*` routes. Falls back to nothing — AI routes throw a clear error if unset and the user hasn't provided a BYOK key. |
 | `YOUTUBE_API_KEY` | Only for Shorts Learning | Server-side YouTube Data API v3 access. Without it, `/api/youtube/search` returns a 500 with a clear message; the rest of the app works fine. |
+| `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` | Only for topic reference images | Google Programmable Search Engine (Custom Search JSON API) credentials used by `/api/images/search` to fetch 3 reference images/diagrams appended to each generated topic. Without them, note generation still works — topics just get no images (the fetch is wrapped in a try/catch in `GenerationContext.tsx` and never fails the topic). |
 | `APP_URL` | No (local dev) | Used for self-referential links / OAuth callbacks when hosted on AI Studio's Cloud Run. Not needed to run locally. |
 
 These are read via `process.env` in `server.ts` only — never bundled into the client, and never prefixed `VITE_`, so there's no risk of them leaking into the browser bundle.

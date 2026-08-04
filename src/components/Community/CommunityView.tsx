@@ -668,6 +668,11 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                                 [Table: {(b.tableData?.[0] || []).join(", ")}]
                               </span>
                             )}
+                            {b.type === "image_gallery" && (b.images || []).length > 0 && (
+                              <span className="text-zinc-500 dark:text-zinc-500 italic">
+                                [{(b.images || []).length} reference image{(b.images || []).length === 1 ? "" : "s"}]
+                              </span>
+                            )}
                             {(b.type === "student_tag" || b.type === "callout") && (
                               <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-[11px] font-medium border border-amber-200/60 dark:border-amber-800/60">
                                 {b.type === "student_tag" && <strong>[{b.tagType?.toUpperCase()}]:</strong>} {b.content}
