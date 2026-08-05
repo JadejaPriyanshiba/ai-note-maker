@@ -16,18 +16,27 @@ import {
   Trash2,
   ArrowLeft,
   ChevronDown,
+  History,
+  Code2,
 } from "lucide-react";
 import { Modal } from "../Modal";
-import { LearnerLevel, Complexity, Depth, NoteLanguage, KnowledgeSource, KnowledgeSourceType } from "../../types";
-import { generateIntakeBrief, IntakeBrief } from "../../lib/aiService";
+import { LearnerLevel, Complexity, Depth, NoteLanguage, KnowledgeSource, KnowledgeSourceType, IntakeSummary } from "../../types";
+import { generateIntakeBrief, IntakeBrief, summarizeSource } from "../../lib/aiService";
 import { fetchUrlSource } from "../../lib/intake/api";
 import { extractPdfText } from "../../lib/intake/pdfExtractor";
 import { buildExtractedSource, dedupeSources, countWords } from "../../lib/intake/normalize";
-import { chunkSources } from "../../lib/intake/chunk";
+import { chunkSource, chunkSources } from "../../lib/intake/chunk";
 import { assembleContext } from "../../lib/intake/assemble";
 import { computeConfidence } from "../../lib/intake/confidence";
 import { ExtractedSource } from "../../lib/intake/types";
-import { getKnowledgeSources, saveKnowledgeSource } from "../../lib/storage";
+import {
+  getKnowledgeSources,
+  saveKnowledgeSource,
+  deleteKnowledgeSource,
+  getIntakeSummaries,
+  saveIntakeSummary,
+  deleteIntakeSummary,
+} from "../../lib/storage";
 
 interface WizardSource {
   id: string;
@@ -37,6 +46,9 @@ interface WizardSource {
   errorMessage?: string;
   extracted?: ExtractedSource;
   savedAs?: string; // KnowledgeSource id, if this came from (or was saved to) the saved-sources library
+  summary?: string; // set once saved — the AI-generated per-resource summary
+  keyPoints?: string[];
+  isSaving?: boolean; // true while the save-time summarize call is in flight
 }
 
 interface IntakeWizardProps {
@@ -51,6 +63,10 @@ interface IntakeWizardProps {
     instructions: string,
     initialTopics: { title: string; description: string; estimatedMinutes?: number }[]
   ) => void;
+  // Deep-link support so callers (e.g. HomeView's "Saved Resources" section) can open straight
+  // into a specific saved item instead of always landing on the blank input step.
+  initialSummaryToResume?: IntakeSummary | null;
+  initialExpandSaved?: boolean;
 }
 
 const sourceIcon: Record<KnowledgeSourceType, React.ElementType> = {
@@ -66,7 +82,36 @@ function nextLocalId(prefix: string): string {
   return `${prefix}_${Date.now()}_${localIdCounter}`;
 }
 
-export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onStartRoadmap }) => {
+// Technical/debug view — shows exactly what the deterministic pipeline (chunk.ts) produces for
+// this source, with no AI involved. Purely for inspection, nothing here is interactive/editable.
+const RawChunksView: React.FC<{ source: ExtractedSource }> = ({ source }) => {
+  const chunks = useMemo(() => chunkSource(source), [source]);
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] text-zinc-400 font-mono">
+        {source.wordCount.toLocaleString()} words • {chunks.length} chunk{chunks.length === 1 ? "" : "s"} • hash {source.contentHash}
+      </p>
+      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+        {chunks.map((c) => (
+          <div key={c.id} className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+              {c.heading || "(no heading)"} · {c.wordCount}w
+            </p>
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 font-mono">{c.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export const IntakeWizard: React.FC<IntakeWizardProps> = ({
+  isOpen,
+  onClose,
+  onStartRoadmap,
+  initialSummaryToResume,
+  initialExpandSaved,
+}) => {
   const [step, setStep] = useState<"input" | "clarify" | "result">("input");
   const [prompt, setPrompt] = useState("");
   const [sources, setSources] = useState<WizardSource[]>([]);
@@ -75,17 +120,30 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
   const [showPaste, setShowPaste] = useState(false);
   const [savedSources, setSavedSources] = useState<KnowledgeSource[]>([]);
   const [showSaved, setShowSaved] = useState(false);
+  const [savedSummaries, setSavedSummaries] = useState<IntakeSummary[]>([]);
+  const [showSavedSummaries, setShowSavedSummaries] = useState(false);
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  const [expandedSourceTab, setExpandedSourceTab] = useState<"summary" | "raw">("summary");
+  const [expandedSavedSourceId, setExpandedSavedSourceId] = useState<string | null>(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [brief, setBrief] = useState<IntakeBrief | null>(null);
   const [answers, setAnswers] = useState<string[]>(["", ""]);
+  const [summarySaved, setSummarySaved] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setSavedSources(getKnowledgeSources());
+      setSavedSummaries(getIntakeSummaries());
+      if (initialSummaryToResume) {
+        resumeSavedSummary(initialSummaryToResume);
+      }
+      if (initialExpandSaved) {
+        setShowSaved(true);
+      }
     } else {
       // Reset for next open — the wizard is intentionally ephemeral by default.
       setStep("input");
@@ -94,9 +152,14 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
       setUrlInput("");
       setPasteText("");
       setShowPaste(false);
+      setShowSavedSummaries(false);
+      setExpandedSourceId(null);
+      setExpandedSourceTab("summary");
+      setExpandedSavedSourceId(null);
       setError(null);
       setBrief(null);
       setAnswers(["", ""]);
+      setSummarySaved(false);
     }
   }, [isOpen]);
 
@@ -186,28 +249,56 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
     setSources((prev) => prev.filter((s) => s.id !== id));
   }
 
+  // Generates a real per-resource AI summary — only at the moment of saving, never automatically
+  // when a source is added, so this additive AI call stays bounded to deliberate user intent. On
+  // a summarization failure, still saves (with a short raw excerpt as a fallback) rather than
+  // losing the source entirely — only the summary/excerpt is persisted, never the full raw text,
+  // to stay well under Firestore's document size limit.
   async function saveSourceForLater(wizardSource: WizardSource) {
-    if (!wizardSource.extracted || wizardSource.savedAs) return;
-    // Only the compressed brief is persisted — never the raw extracted text — to stay well
-    // under Firestore's document size limit and because the brief is what future intake
-    // sessions actually consume.
-    const brief = wizardSource.extracted.text.length > 1200
-      ? wizardSource.extracted.text.slice(0, 1200) + "…"
-      : wizardSource.extracted.text;
+    if (!wizardSource.extracted || wizardSource.savedAs || wizardSource.isSaving) return;
+    upsertSource({ ...wizardSource, isSaving: true });
+
+    let summary: string;
+    let keyPoints: string[] = [];
+    try {
+      const result = await summarizeSource({
+        title: wizardSource.title,
+        text: wizardSource.extracted.text,
+        sourceType: wizardSource.sourceType,
+      });
+      summary = result.summary;
+      keyPoints = result.keyPoints;
+    } catch (err: any) {
+      summary =
+        wizardSource.extracted.text.length > 500
+          ? wizardSource.extracted.text.slice(0, 500) + "…"
+          : wizardSource.extracted.text;
+      setError(`Couldn't generate an AI summary for "${wizardSource.title}" (saved with a raw excerpt instead): ${err.message || "unknown error"}`);
+    }
+
     const saved = saveKnowledgeSource({
       id: nextLocalId("ksrc"),
       sourceType: wizardSource.sourceType,
       title: wizardSource.title,
       originUrl: wizardSource.extracted.originUrl,
       fileName: wizardSource.extracted.fileName,
-      brief,
+      brief: summary,
+      keyPoints,
       wordCount: wizardSource.extracted.wordCount,
       contentHash: wizardSource.extracted.contentHash,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
     setSavedSources((prev) => [saved, ...prev]);
-    upsertSource({ ...wizardSource, savedAs: saved.id });
+    upsertSource({ ...wizardSource, savedAs: saved.id, summary, keyPoints, isSaving: false });
+  }
+
+  function deleteSavedSource(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    deleteKnowledgeSource(id);
+    setSavedSources((prev) => prev.filter((s) => s.id !== id));
+    setSources((prev) => prev.map((s) => (s.savedAs === id ? { ...s, savedAs: undefined } : s)));
+    if (expandedSavedSourceId === id) setExpandedSavedSourceId(null);
   }
 
   async function runAnalysis(priorQuestions?: string[], priorAnswers?: string[]) {
@@ -223,6 +314,7 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
         priorAnswers,
       });
       setBrief(result);
+      setSummarySaved(false);
       if (!priorQuestions && result.confidence < 70 && result.clarifyingQuestions.length > 0) {
         setStep("clarify");
       } else {
@@ -252,6 +344,55 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
       brief.topics
     );
     onClose();
+  }
+
+  // Saves the generated brief on its own — the intake-brief call already spent tokens producing
+  // it, so a user who doesn't want to commit to a full roadmap yet still gets to keep it, and can
+  // resume straight into this same result screen later with no new AI call.
+  function handleSaveSummary() {
+    if (!brief) return;
+    const saved = saveIntakeSummary({
+      id: nextLocalId("isum"),
+      subject: brief.subject,
+      mainTopic: brief.mainTopic,
+      learnerLevel: brief.learnerLevel,
+      complexity: brief.complexity,
+      depth: brief.depth,
+      language: brief.language,
+      summary: brief.instructions,
+      topics: brief.topics,
+      confidence: brief.confidence,
+      sourceTitles: readySources.map((s) => s.title),
+      prompt: prompt.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setSavedSummaries((prev) => [saved, ...prev]);
+    setSummarySaved(true);
+  }
+
+  function resumeSavedSummary(s: IntakeSummary) {
+    setBrief({
+      subject: s.subject,
+      mainTopic: s.mainTopic,
+      learnerLevel: s.learnerLevel,
+      complexity: s.complexity,
+      depth: s.depth,
+      language: s.language,
+      instructions: s.summary,
+      topics: s.topics,
+      confidence: s.confidence,
+      clarifyingQuestions: [],
+    });
+    setSummarySaved(true);
+    setError(null);
+    setStep("result");
+  }
+
+  function handleDeleteSummary(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    deleteIntakeSummary(id);
+    setSavedSummaries((prev) => prev.filter((s) => s.id !== id));
   }
 
   const canAnalyze = !isBusy && !isAnalyzing && (prompt.trim().length > 0 || readySources.length > 0);
@@ -365,27 +506,125 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
                   <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSaved ? "rotate-180" : ""}`} />
                 </button>
                 {showSaved && (
-                  <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto">
+                  <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
                     {savedSources.map((s) => {
                       const included = sources.some((w) => w.savedAs === s.id);
                       const Icon = sourceIcon[s.sourceType];
+                      const isExpanded = expandedSavedSourceId === s.id;
                       return (
-                        <button
+                        <div
                           key={s.id}
-                          type="button"
-                          onClick={() => toggleSavedSource(s)}
-                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs transition-colors border ${
+                          className={`rounded-lg border overflow-hidden ${
                             included
-                              ? "bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white text-white dark:text-zinc-900"
-                              : "border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              ? "bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white"
+                              : "border-zinc-200 dark:border-zinc-700"
                           }`}
                         >
-                          <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate flex-1 font-medium">{s.title}</span>
-                          {included && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleSavedSource(s)}
+                            className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-xs transition-colors ${
+                              included
+                                ? "text-white dark:text-zinc-900"
+                                : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate flex-1 font-medium">{s.title}</span>
+                            {included && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedSavedSourceId(isExpanded ? null : s.id);
+                              }}
+                              className="p-0.5 rounded shrink-0"
+                              title="View saved summary"
+                            >
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                            </span>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => deleteSavedSource(s.id, e)}
+                              className={`p-0.5 rounded shrink-0 ${included ? "hover:text-red-300" : "hover:text-red-600 dark:hover:text-red-400"}`}
+                              title="Delete this saved source"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </span>
+                          </button>
+                          {isExpanded && (
+                            <div
+                              className={`px-2.5 pb-2.5 pt-1 space-y-1.5 border-t ${
+                                included ? "border-white/20 dark:border-zinc-900/20" : "border-zinc-100 dark:border-zinc-800"
+                              }`}
+                            >
+                              <p className={`text-[11px] leading-relaxed ${included ? "text-white/90 dark:text-zinc-900/90" : "text-zinc-600 dark:text-zinc-400"}`}>
+                                {s.brief}
+                              </p>
+                              {s.keyPoints && s.keyPoints.length > 0 && (
+                                <ul className="space-y-1">
+                                  {s.keyPoints.map((kp, idx) => (
+                                    <li
+                                      key={idx}
+                                      className={`flex items-start gap-1.5 text-[10px] ${included ? "text-white/80 dark:text-zinc-900/80" : "text-zinc-500 dark:text-zinc-500"}`}
+                                    >
+                                      <span className="w-1 h-1 rounded-full bg-current shrink-0 mt-1.5" />
+                                      <span>{kp}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              <p className={`text-[10px] ${included ? "text-white/60 dark:text-zinc-900/60" : "text-zinc-400"}`}>
+                                {s.wordCount.toLocaleString()} words • saved {new Date(s.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {savedSummaries.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowSavedSummaries((v) => !v)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Your saved summaries ({savedSummaries.length})</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSavedSummaries ? "rotate-180" : ""}`} />
+                </button>
+                {showSavedSummaries && (
+                  <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
+                    {savedSummaries.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => resumeSavedSummary(s)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{s.subject}</p>
+                          <p className="text-[11px] text-zinc-400">
+                            {s.topics.length} topics • {s.confidence}% confidence • {new Date(s.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => handleDeleteSummary(s.id, e)}
+                          className="p-1 rounded-lg text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -395,42 +634,113 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
               <div className="space-y-1.5">
                 {sources.map((s) => {
                   const Icon = sourceIcon[s.sourceType];
+                  const isExpanded = expandedSourceId === s.id;
                   return (
                     <div
                       key={s.id}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                      className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 overflow-hidden"
                     >
-                      <Icon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{s.title}</p>
-                        {s.status === "error" && <p className="text-[11px] text-red-600 dark:text-red-400">{s.errorMessage}</p>}
-                        {s.status === "ready" && s.extracted && (
-                          <p className="text-[11px] text-zinc-400">{s.extracted.wordCount.toLocaleString()} words</p>
+                      <div className="flex items-center gap-2.5 px-3 py-2">
+                        <Icon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{s.title}</p>
+                          {s.status === "error" && <p className="text-[11px] text-red-600 dark:text-red-400">{s.errorMessage}</p>}
+                          {s.status === "ready" && s.extracted && (
+                            <p className="text-[11px] text-zinc-400">{s.extracted.wordCount.toLocaleString()} words</p>
+                          )}
+                        </div>
+                        {s.status === "extracting" && <Loader2 className="w-3.5 h-3.5 text-zinc-400 animate-spin shrink-0" />}
+                        {s.status === "ready" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedSourceId(isExpanded ? null : s.id);
+                              setExpandedSourceTab("summary");
+                            }}
+                            title="View summary / raw chunks"
+                            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </button>
                         )}
-                      </div>
-                      {s.status === "extracting" && <Loader2 className="w-3.5 h-3.5 text-zinc-400 animate-spin shrink-0" />}
-                      {s.status === "ready" && !s.savedAs && (
+                        {s.status === "ready" && !s.savedAs && (
+                          <button
+                            type="button"
+                            onClick={() => saveSourceForLater(s)}
+                            disabled={s.isSaving}
+                            title="Save this source — generates an AI summary you can read later"
+                            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-50 transition-colors"
+                          >
+                            {s.isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bookmark className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                        {s.savedAs && (
+                          <span title="Saved to your library">
+                            <BookmarkCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          </span>
+                        )}
                         <button
                           type="button"
-                          onClick={() => saveSourceForLater(s)}
-                          title="Save this source for future imports"
-                          className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                          onClick={() => removeSource(s.id)}
+                          className="p-1 rounded-lg text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                         >
-                          <Bookmark className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                      </div>
+
+                      {isExpanded && s.extracted && (
+                        <div className="px-3 pb-3 pt-1 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSourceTab("summary")}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                                expandedSourceTab === "summary"
+                                  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                                  : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              }`}
+                            >
+                              Summary
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSourceTab("raw")}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                                expandedSourceTab === "raw"
+                                  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                                  : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              }`}
+                              title="Technical view: how the deterministic pipeline chunked this source"
+                            >
+                              <Code2 className="w-3 h-3" /> Raw
+                            </button>
+                          </div>
+
+                          {expandedSourceTab === "summary" ? (
+                            s.summary ? (
+                              <div className="space-y-1.5">
+                                <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">{s.summary}</p>
+                                {s.keyPoints && s.keyPoints.length > 0 && (
+                                  <ul className="space-y-1">
+                                    {s.keyPoints.map((kp, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                                        <span className="w-1 h-1 rounded-full bg-zinc-400 shrink-0 mt-1.5" />
+                                        <span>{kp}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-zinc-400 italic">
+                                No AI summary yet — click the bookmark icon to save this source and generate one.
+                              </p>
+                            )
+                          ) : (
+                            <RawChunksView source={s.extracted} />
+                          )}
+                        </div>
                       )}
-                      {s.savedAs && (
-                        <span title="Saved to your library">
-                          <BookmarkCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeSource(s.id)}
-                        className="p-1 rounded-lg text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   );
                 })}
@@ -557,13 +867,32 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ isOpen, onClose, onS
               <button type="button" onClick={() => setStep("input")} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                 <ArrowLeft className="w-3.5 h-3.5" /> Start over
               </button>
-              <button
-                type="button"
-                onClick={handleContinueToRoadmap}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-bold shadow-md transition-all"
-              >
-                Continue to Roadmap <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveSummary}
+                  disabled={summarySaved}
+                  title="Save this summary without generating a full note — no new AI call to resume it later"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-default transition-colors"
+                >
+                  {summarySaved ? (
+                    <>
+                      <BookmarkCheck className="w-3.5 h-3.5 text-emerald-500" /> Saved
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark className="w-3.5 h-3.5" /> Save Summary
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleContinueToRoadmap}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-bold shadow-md transition-all"
+                >
+                  Continue to Roadmap <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         )}

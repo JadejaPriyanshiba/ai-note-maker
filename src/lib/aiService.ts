@@ -88,6 +88,27 @@ export async function generateIntakeBrief(params: {
   return data.brief as IntakeBrief;
 }
 
+// A second, small AI call — separate from generateIntakeBrief — that summarizes ONE resource on
+// its own. Only ever called when a user explicitly saves a source (see IntakeWizard.tsx), never
+// automatically when a source is added, to keep this additive call bounded to deliberate intent.
+export async function summarizeSource(params: {
+  title: string;
+  text: string;
+  sourceType: string;
+}): Promise<{ summary: string; keyPoints: string[] }> {
+  incrementAIRequestCount();
+  const res = await fetch("/api/ai/summarize-source", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.error || "Failed to summarize source");
+  }
+  return { summary: data.summary as string, keyPoints: (data.keyPoints as string[]) || [] };
+}
+
 export async function suggestTopics(subject: string, existingTopics: string[]) {
   incrementAIRequestCount();
   const res = await fetch("/api/ai/suggest-topics", {

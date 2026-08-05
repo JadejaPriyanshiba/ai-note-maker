@@ -361,7 +361,7 @@ app.post("/api/images/search", async (req: Request, res: Response) => {
   }
 });
 
-// ==================== KNOWLEDGE INTAKE (deterministic extraction, no LLM) ==================== //
+// ==================== KNOWLEDGE INTAKE — deterministic extraction (no LLM below, until noted) ==================== //
 
 // Server-side cache to avoid re-fetching/re-parsing the same URL within a session (mirrors the
 // YouTube search cache above).
@@ -555,7 +555,9 @@ app.post("/api/intake/fetch-url", async (req: Request, res: Response) => {
   }
 });
 
-// The single LLM call in the Knowledge Intake pipeline. Everything upstream (extraction,
+// ==================== KNOWLEDGE INTAKE — AI calls from here down ==================== //
+
+// The main LLM call in the Knowledge Intake pipeline. Everything upstream (extraction,
 // chunking, BM25 retrieval, confidence scoring) already happened client-side — `sources` here is
 // already the token-budgeted, retrieval-filtered context, not raw source dumps. Reuses the exact
 // RoadmapTopic shape ({title, description, estimatedMinutes}) so the result plugs directly into
@@ -661,6 +663,79 @@ Produce:
   } catch (error: any) {
     console.error("Intake brief error:", error);
     res.status(500).json({ success: false, error: error.message || "Failed to generate intake brief" });
+  }
+});
+
+// Server-side cache to avoid re-summarizing the same source content within a session/TTL —
+// summaries only run when a user explicitly saves a source (not automatically on add), so this
+// mainly protects against saving, deleting, and re-saving the same thing.
+const sourceSummaryCache = new Map<string, { timestamp: number; summary: string; keyPoints: string[] }>();
+const SOURCE_SUMMARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SOURCE_SUMMARY_INPUT_CHAR_CAP = 3000; // keep the input tight — this is a per-resource preview, not a full analysis
+
+// A second, small LLM call — separate from /api/ai/intake-brief — that summarizes ONE resource
+// on its own so a user can read/save "what's in this PDF/link" without running the combined
+// multi-source analysis. Only called when a source is explicitly saved (see IntakeWizard.tsx),
+// never automatically when a source is added, to keep this additive call bounded to deliberate
+// user intent. Both the prompt input and the requested output are deliberately short to keep
+// token usage minimal for what's meant to be a quick preview, not a deep analysis.
+app.post("/api/ai/summarize-source", async (req: Request, res: Response) => {
+  try {
+    const { title, text, sourceType } = req.body || {};
+    const cleanText = (text || "").trim();
+    if (!cleanText) {
+      return res.status(400).json({ success: false, error: "No text to summarize." });
+    }
+
+    const cappedText = cleanText.slice(0, SOURCE_SUMMARY_INPUT_CHAR_CAP);
+    const cacheKey = `${(title || "").toLowerCase()}_${cappedText.length}_${cappedText.slice(0, 200)}`;
+    const cached = sourceSummaryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < SOURCE_SUMMARY_CACHE_TTL_MS) {
+      return res.json({ success: true, summary: cached.summary, keyPoints: cached.keyPoints, cached: true });
+    }
+
+    const ai = getGenAI(req);
+    const promptText = `
+Summarize this ${sourceType || "source"} titled "${title || "Untitled"}" for a student deciding whether to use it as study material.
+
+Content:
+"${cappedText}"
+
+Be extremely concise — 2-3 sentences maximum for the summary, do not restate the content verbatim.
+    `;
+
+    const response = await generateWithRetry(ai, {
+      model: "gemini-3.6-flash",
+      contents: promptText,
+      config: {
+        systemInstruction: "You produce short, information-dense source summaries. Return ONLY valid JSON. Never pad with filler.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING, description: "2-3 sentence overview, maximum" },
+            keyPoints: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "3-5 short key-point bullets, each under 12 words",
+            },
+          },
+          required: ["summary", "keyPoints"],
+        },
+      },
+    });
+
+    const parsed = safeJsonParse<any>(response.text || "{}", null);
+    if (!parsed || !parsed.summary) {
+      return res.status(500).json({ success: false, error: "AI could not summarize this source." });
+    }
+
+    const keyPoints = Array.isArray(parsed.keyPoints) ? parsed.keyPoints.slice(0, 5) : [];
+    sourceSummaryCache.set(cacheKey, { timestamp: Date.now(), summary: parsed.summary, keyPoints });
+    res.json({ success: true, summary: parsed.summary, keyPoints });
+  } catch (error: any) {
+    console.error("Source summary error:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to summarize source" });
   }
 });
 

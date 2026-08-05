@@ -529,9 +529,32 @@ export interface KnowledgeSource {
   title: string;
   originUrl?: string; // for 'web' / 'youtube'
   fileName?: string; // for 'pdf'
-  brief: string; // compressed, structured summary (bullet facts/terminology), token-budgeted
-  wordCount: number; // of the original extracted text, before compression
+  brief: string; // AI-generated summary of the source (generated once, at save time)
+  keyPoints?: string[]; // short key-point bullets from the same summary call
+  wordCount: number; // of the original extracted text, before summarization
   contentHash: string; // hash of normalized extracted text, for de-dup on re-import
+  createdAt: string;
+  updatedAt: string;
+}
+
+// The output of the single intake-brief LLM call — subject/level/etc, the compressed generation
+// brief, and the topic list it implies — saved on its own so a user who doesn't want to proceed
+// to a full roadmap/note yet still keeps what they already paid tokens to generate. Resuming one
+// re-enters the wizard's result step directly, with no new AI call.
+export interface IntakeSummary {
+  id: string;
+  ownerId?: string;
+  subject: string;
+  mainTopic?: string;
+  learnerLevel: LearnerLevel;
+  complexity: Complexity;
+  depth: Depth;
+  language: NoteLanguage;
+  summary: string; // the compressed brief (IntakeBrief.instructions)
+  topics: { title: string; description: string; estimatedMinutes?: number }[];
+  confidence: number;
+  sourceTitles: string[]; // titles of the sources that contributed, for context only
+  prompt?: string; // the user's original natural-language request, if any
   createdAt: string;
   updatedAt: string;
 }

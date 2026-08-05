@@ -31,6 +31,7 @@ import {
   RevisionPlan,
   PodcastEpisode,
   KnowledgeSource,
+  IntakeSummary,
 } from "../types";
 
 export interface UserProfile {
@@ -855,5 +856,42 @@ export async function deleteKnowledgeSourceFromCloud(id: string): Promise<void> 
     await deleteDoc(doc(db, "knowledge_sources", id));
   } catch (err) {
     console.error("Error deleting knowledge source from cloud:", err);
+  }
+}
+
+// ==================== INTAKE SUMMARIES (Knowledge Intake pipeline) ==================== //
+
+export async function fetchUserIntakeSummariesFromCloud(userId: string): Promise<IntakeSummary[]> {
+  try {
+    const q = query(collection(db, "intake_summaries"), where("ownerId", "==", userId));
+    const snap = await getDocs(q);
+    const list: IntakeSummary[] = [];
+    snap.forEach((docSnap) => {
+      list.push(deserializeFromFirestore(docSnap.data()) as IntakeSummary);
+    });
+    return list.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  } catch (err) {
+    console.error("Error fetching intake summaries from cloud:", err);
+    return [];
+  }
+}
+
+export async function saveIntakeSummaryToCloud(summary: IntakeSummary, userId: string): Promise<boolean> {
+  try {
+    const ref = doc(db, "intake_summaries", summary.id);
+    const payload = sanitizeForFirestore({ ...summary, ownerId: userId });
+    await setDoc(ref, payload);
+    return true;
+  } catch (err) {
+    console.error("Error saving intake summary to cloud:", err);
+    return false;
+  }
+}
+
+export async function deleteIntakeSummaryFromCloud(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "intake_summaries", id));
+  } catch (err) {
+    console.error("Error deleting intake summary from cloud:", err);
   }
 }

@@ -140,6 +140,18 @@ Server-side proxy to Google's official Custom Search JSON API (`searchType=image
   - Returns `429` specifically on Google API quota/permission errors (HTTP 403/429), matching the `/api/youtube/search` convention.
   - `GenerationContext.tsx` calls this once per topic after `/api/ai/topic-notes` succeeds and appends the result as an `image_gallery`-type `NoteBlock` — this is deterministic post-processing, not part of the AI's JSON output, so it's not in `topic-notes`'s `responseSchema`. A failure here is swallowed (logged, not surfaced) and never fails the topic itself.
 
+## `POST /api/ai/summarize-source`
+
+A second, small LLM call in the Knowledge Intake pipeline — separate from `/api/ai/intake-brief` — that summarizes **one** resource on its own, so a user can read/save "what's in this PDF/link" without running the combined multi-source analysis. Only ever called when a user explicitly saves a source in `IntakeWizard.tsx` (see `saveSourceForLater`), never automatically when a source is added, to keep this additive call bounded to deliberate intent. Both input and output are deliberately capped to keep token usage minimal — this is a quick preview, not a deep analysis.
+
+- **Body:** `{ title: string, text: string, sourceType: string }`
+- **Response:** `{ success: true, summary: string, keyPoints: string[], cached?: true }`
+- **Behavior:**
+  - `text` is truncated server-side to ~3000 characters before prompting.
+  - The model is instructed to return a 2-3 sentence summary and 3-5 short key-point bullets — kept tight in both directions.
+  - Results are cached server-side per (title, text-prefix) for 7 days.
+  - On failure, the client (`IntakeWizard.tsx`) falls back to saving a short raw excerpt instead of failing the save entirely.
+
 ## `POST /api/youtube/search`
 
 Server-side proxy to the YouTube Data API v3 (official API only, no scraping), used for both Shorts Learning content discovery and the revision feed. Requires `YOUTUBE_API_KEY` to be set — returns `500` with a clear message if it isn't.

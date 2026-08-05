@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { fadeInUp, staggerContainer } from "../lib/motion";
-import { LearnerLevel, Complexity, Depth, NoteLanguage, NoteDocument } from "../types";
+import { LearnerLevel, Complexity, Depth, NoteLanguage, NoteDocument, IntakeSummary, KnowledgeSourceType } from "../types";
 import { generateRoadmap } from "../lib/aiService";
-import { getSavedNotes, getCommunityNotes, getTestAttempts, getFlashcardDecks } from "../lib/storage";
+import { getSavedNotes, getCommunityNotes, getTestAttempts, getFlashcardDecks, getKnowledgeSources, getIntakeSummaries } from "../lib/storage";
 import { EmptyState } from "./EmptyState";
 import { IntakeWizard } from "./Intake/IntakeWizard";
 import {
@@ -20,7 +20,19 @@ import {
   TrendingUp,
   PlayCircle,
   Sparkles,
+  Library,
+  FileText,
+  Link2,
+  Youtube,
+  AlignLeft,
 } from "lucide-react";
+
+const savedResourceIcon: Record<KnowledgeSourceType, React.ElementType> = {
+  pdf: FileText,
+  web: Link2,
+  youtube: Youtube,
+  text: AlignLeft,
+};
 
 interface HomeViewProps {
   onStartRoadmap: (
@@ -68,11 +80,33 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [instructions, setInstructions] = useState<string>("");
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState<boolean>(false);
   const [showIntakeWizard, setShowIntakeWizard] = useState<boolean>(false);
+  const [wizardResumeSummary, setWizardResumeSummary] = useState<IntakeSummary | null>(null);
+  const [wizardExpandSaved, setWizardExpandSaved] = useState<boolean>(false);
 
   const savedNotes = getSavedNotes();
   const communityNotes = getCommunityNotes();
   const testAttempts = getTestAttempts();
   const decks = getFlashcardDecks();
+  const savedKnowledgeSources = getKnowledgeSources();
+  const savedIntakeSummaries = getIntakeSummaries();
+
+  function openIntakeWizard() {
+    setWizardResumeSummary(null);
+    setWizardExpandSaved(false);
+    setShowIntakeWizard(true);
+  }
+
+  function openIntakeWizardOnSummary(summary: IntakeSummary) {
+    setWizardResumeSummary(summary);
+    setWizardExpandSaved(false);
+    setShowIntakeWizard(true);
+  }
+
+  function openIntakeWizardOnSavedSources() {
+    setWizardResumeSummary(null);
+    setWizardExpandSaved(true);
+    setShowIntakeWizard(true);
+  }
 
   // Find recent weak topics if any from recent test attempts
   const recentAttempt = testAttempts[0];
@@ -221,7 +255,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span className="text-zinc-300 dark:text-zinc-700 text-xs">or</span>
             <button
               type="button"
-              onClick={() => setShowIntakeWizard(true)}
+              onClick={openIntakeWizard}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors py-1"
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -513,6 +547,84 @@ export const HomeView: React.FC<HomeViewProps> = ({
         )}
       </div>
 
+      {/* Saved Resources Section — summaries/sources saved from the Knowledge Intake wizard,
+          without necessarily generating a roadmap. Only shown once the user has saved something,
+          to avoid clutter for anyone who's never used the wizard. */}
+      {(savedIntakeSummaries.length > 0 || savedKnowledgeSources.length > 0) && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
+              <Library className="w-4.5 h-4.5 text-zinc-400 dark:text-zinc-500" />
+              <span>Saved Resources</span>
+            </h2>
+            <button
+              onClick={openIntakeWizard}
+              className="text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors"
+            >
+              <span>Import More</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {savedIntakeSummaries.length > 0 && (
+            <motion.div
+              variants={staggerContainer()}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
+              {savedIntakeSummaries.slice(0, 3).map((s) => (
+                <motion.div
+                  key={s.id}
+                  variants={fadeInUp}
+                  onClick={() => openIntakeWizardOnSummary(s)}
+                  className="group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:shadow-lg hover:-translate-y-0.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold uppercase tracking-wide">
+                      {s.confidence}% confidence
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                  <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-snug min-h-[2.5em]">
+                    {s.subject}
+                  </h3>
+                  <p className="text-[11px] font-medium text-zinc-400">
+                    {s.topics.length} topics planned • {new Date(s.createdAt).toLocaleDateString()}
+                  </p>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+
+          {savedKnowledgeSources.length > 0 && (
+            <button
+              type="button"
+              onClick={openIntakeWizardOnSavedSources}
+              className="w-full flex items-center gap-2 px-4 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xs transition-all text-left"
+            >
+              <div className="flex -space-x-1.5 shrink-0">
+                {savedKnowledgeSources.slice(0, 4).map((src) => {
+                  const Icon = savedResourceIcon[src.sourceType];
+                  return (
+                    <div
+                      key={src.id}
+                      className="w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-white dark:border-zinc-900 flex items-center justify-center"
+                    >
+                      <Icon className="w-3 h-3 text-zinc-500 dark:text-zinc-400" />
+                    </div>
+                  );
+                })}
+              </div>
+              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex-1">
+                {savedKnowledgeSources.length} saved source{savedKnowledgeSources.length === 1 ? "" : "s"} (PDFs, links, notes)
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 text-zinc-400" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Recommended Community Notes Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -573,8 +685,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       <IntakeWizard
         isOpen={showIntakeWizard}
-        onClose={() => setShowIntakeWizard(false)}
+        onClose={() => {
+          setShowIntakeWizard(false);
+          setWizardResumeSummary(null);
+          setWizardExpandSaved(false);
+        }}
         onStartRoadmap={onStartRoadmap}
+        initialSummaryToResume={wizardResumeSummary}
+        initialExpandSaved={wizardExpandSaved}
       />
     </div>
   );
