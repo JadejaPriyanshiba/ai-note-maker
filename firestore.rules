@@ -125,5 +125,15 @@ service cloud.firestore {
       allow read, update, delete: if isDocOwner();
       allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
     }
+
+    match /knowledge_sources/{sourceId} {
+      allow read, update, delete: if isDocOwner();
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    match /intake_summaries/{summaryId} {
+      allow read, update, delete: if isDocOwner();
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+    }
   }
 }

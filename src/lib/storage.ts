@@ -17,6 +17,8 @@ import {
   SavedLearningResource,
   RevisionPlan,
   PodcastEpisode,
+  KnowledgeSource,
+  IntakeSummary,
 } from "../types";
 import { auth } from "./firebase";
 import {
@@ -70,6 +72,12 @@ import {
   fetchUserPodcastsFromCloud,
   savePodcastToCloud,
   deletePodcastFromCloud,
+  fetchUserKnowledgeSourcesFromCloud,
+  saveKnowledgeSourceToCloud,
+  deleteKnowledgeSourceFromCloud,
+  fetchUserIntakeSummariesFromCloud,
+  saveIntakeSummaryToCloud,
+  deleteIntakeSummaryFromCloud,
 } from "./syncService";
 
 const NOTES_STORAGE_KEY = "ainotemaker_user_notes_v1";
@@ -87,6 +95,8 @@ const LEARNING_TREES_KEY = "ainotemaker_learning_trees_v1";
 const LEARNING_SESSIONS_KEY = "ainotemaker_learning_sessions_v1";
 const SAVED_LEARNING_RESOURCES_KEY = "ainotemaker_saved_learning_resources_v1";
 const PODCASTS_STORAGE_KEY = "ainotemaker_podcasts_v1";
+const KNOWLEDGE_SOURCES_KEY = "ainotemaker_knowledge_sources_v1";
+const INTAKE_SUMMARIES_KEY = "ainotemaker_intake_summaries_v1";
 
 // Seed IDs to filter out if present in existing local storage
 const SEED_COLLECTION_IDS = ["col_sem1", "col_cn", "col_unit1"];
@@ -235,6 +245,28 @@ export async function migrateLocalDataToCloud(userId: string): Promise<Migration
     total += podcasts.length;
     uploaded += await uploadBatch(podcasts, "Podcast Episode", (p) => p.noteTitle, savePodcastToCloud, userId, failed);
 
+    const knowledgeSources = getKnowledgeSources();
+    total += knowledgeSources.length;
+    uploaded += await uploadBatch(
+      knowledgeSources,
+      "Knowledge Source",
+      (s) => s.title,
+      saveKnowledgeSourceToCloud,
+      userId,
+      failed
+    );
+
+    const intakeSummaries = getIntakeSummaries();
+    total += intakeSummaries.length;
+    uploaded += await uploadBatch(
+      intakeSummaries,
+      "Intake Summary",
+      (s) => s.subject,
+      saveIntakeSummaryToCloud,
+      userId,
+      failed
+    );
+
     localStorage.setItem(`ainotemaker_migrated_${userId}`, "true");
     return { success: failed.length === 0, uploaded, total, failed };
   } catch (e) {
@@ -269,6 +301,8 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
       cloudTeachBackEvals,
       cloudRevisionResources,
       cloudPodcasts,
+      cloudKnowledgeSources,
+      cloudIntakeSummaries,
     ] = await Promise.all([
       fetchUserNotesFromCloud(userId),
       fetchUserCollectionsFromCloud(userId),
@@ -286,6 +320,8 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
       fetchUserTeachBackEvaluationsFromCloud(userId),
       fetchUserRevisionResourcesFromCloud(userId),
       fetchUserPodcastsFromCloud(userId),
+      fetchUserKnowledgeSourcesFromCloud(userId),
+      fetchUserIntakeSummariesFromCloud(userId),
     ]);
 
     if (cloudNotes.length > 0) {
@@ -336,6 +372,12 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
     if (cloudPodcasts.length > 0) {
       localStorage.setItem(PODCASTS_STORAGE_KEY, JSON.stringify(cloudPodcasts));
     }
+    if (cloudKnowledgeSources.length > 0) {
+      localStorage.setItem(KNOWLEDGE_SOURCES_KEY, JSON.stringify(cloudKnowledgeSources));
+    }
+    if (cloudIntakeSummaries.length > 0) {
+      localStorage.setItem(INTAKE_SUMMARIES_KEY, JSON.stringify(cloudIntakeSummaries));
+    }
 
     return {
       success: true,
@@ -352,6 +394,8 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
         "Teach-Back Evaluations": cloudTeachBackEvals.length,
         "Revision Guides": cloudRevisionResources.length,
         "Podcast Episodes": cloudPodcasts.length,
+        "Knowledge Sources": cloudKnowledgeSources.length,
+        "Intake Summaries": cloudIntakeSummaries.length,
       },
     };
   } catch (err) {
@@ -392,6 +436,8 @@ export function clearAllLocalWebCache(): void {
     localStorage.removeItem("ainotemaker_saved_hubs_set");
     localStorage.removeItem("ainotemaker_revision_guides_v1");
     localStorage.removeItem(PODCASTS_STORAGE_KEY);
+    localStorage.removeItem(KNOWLEDGE_SOURCES_KEY);
+    localStorage.removeItem(INTAKE_SUMMARIES_KEY);
   } catch (e) {
     console.error("Error clearing local web cache:", e);
   }
@@ -1506,6 +1552,95 @@ export function deletePodcastEpisode(id: string): void {
   const uid = getCurrentUserId();
   if (uid) {
     deletePodcastFromCloud(id);
+  }
+}
+
+// Knowledge Intake — sources the user explicitly chose to save (from the intake wizard) so they
+// can be reused in a future intake session from any signed-in device. The wizard itself works
+// fully ephemerally by default; saving is always a deliberate user action, never automatic.
+export function getKnowledgeSources(): KnowledgeSource[] {
+  try {
+    const raw = localStorage.getItem(KNOWLEDGE_SOURCES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveKnowledgeSource(source: KnowledgeSource): KnowledgeSource {
+  const items = getKnowledgeSources();
+  const saved: KnowledgeSource = {
+    ...source,
+    ownerId: source.ownerId || getCurrentUserId() || "user_local_1",
+    updatedAt: new Date().toISOString(),
+  };
+  const idx = items.findIndex((s) => s.id === saved.id);
+  if (idx >= 0) {
+    items[idx] = saved;
+  } else {
+    items.unshift(saved);
+  }
+  localStorage.setItem(KNOWLEDGE_SOURCES_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    saveKnowledgeSourceToCloud(saved, uid);
+  }
+  return saved;
+}
+
+export function deleteKnowledgeSource(id: string): void {
+  const items = getKnowledgeSources().filter((s) => s.id !== id);
+  localStorage.setItem(KNOWLEDGE_SOURCES_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    deleteKnowledgeSourceFromCloud(id);
+  }
+}
+
+// Knowledge Intake — the generated brief itself (subject/level/topics/compressed summary), saved
+// on its own when a user doesn't want to proceed straight to a roadmap. Since the intake-brief
+// AI call already spent tokens producing this, saving it means that spend isn't lost — the
+// wizard can resume straight into the result step from a saved summary with no new AI call.
+export function getIntakeSummaries(): IntakeSummary[] {
+  try {
+    const raw = localStorage.getItem(INTAKE_SUMMARIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveIntakeSummary(summary: IntakeSummary): IntakeSummary {
+  const items = getIntakeSummaries();
+  const saved: IntakeSummary = {
+    ...summary,
+    ownerId: summary.ownerId || getCurrentUserId() || "user_local_1",
+    updatedAt: new Date().toISOString(),
+  };
+  const idx = items.findIndex((s) => s.id === saved.id);
+  if (idx >= 0) {
+    items[idx] = saved;
+  } else {
+    items.unshift(saved);
+  }
+  localStorage.setItem(INTAKE_SUMMARIES_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    saveIntakeSummaryToCloud(saved, uid);
+  }
+  return saved;
+}
+
+export function deleteIntakeSummary(id: string): void {
+  const items = getIntakeSummaries().filter((s) => s.id !== id);
+  localStorage.setItem(INTAKE_SUMMARIES_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    deleteIntakeSummaryFromCloud(id);
   }
 }
 

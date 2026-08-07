@@ -1,7 +1,11 @@
 import express, { Request, Response } from "express";
 import path from "path";
 import dotenv from "dotenv";
+import dns from "node:dns/promises";
+import net from "node:net";
 import { GoogleGenAI, Type } from "@google/genai";
+import { JSDOM } from "jsdom";
+import { Readability } from "@mozilla/readability";
 
 dotenv.config();
 
@@ -279,6 +283,459 @@ app.post("/api/youtube/search", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("YouTube search error:", error);
     res.status(500).json({ success: false, error: error.message || "YouTube search failed." });
+  }
+});
+
+// ==================== TOPIC IMAGE SEARCH (Google Custom Search JSON API) ==================== //
+
+// Same quota-conscious caching approach as the YouTube search cache above.
+const imageSearchCache = new Map<string, { timestamp: number; images: any[] }>();
+const IMAGE_SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — reference images for a topic don't go stale
+
+// Server-side proxy to Google's official Custom Search JSON API (searchType=image), used to
+// surface 2-3 reference diagrams/images at the end of each generated topic. Not a Gemini call —
+// exempt from BYOK. Requires GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX (a Programmable Search
+// Engine configured to search the entire web with Image Search enabled). Deliberately not
+// scraping Google Images directly, matching this project's "official API only" precedent for
+// YouTube.
+app.post("/api/images/search", async (req: Request, res: Response) => {
+  try {
+    const { query, count } = req.body || {};
+    const cleanQuery = (query || "").trim();
+    if (!cleanQuery) {
+      return res.status(400).json({ success: false, error: "A search query is required." });
+    }
+
+    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
+    const cx = process.env.GOOGLE_SEARCH_CX;
+    if (!apiKey || !cx) {
+      return res.status(500).json({
+        success: false,
+        error: "Image search is not configured on the server. Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX to enable topic reference images.",
+      });
+    }
+
+    const maxResults = Math.min(Math.max(Number(count) || 3, 1), 6);
+    const cacheKey = `${cleanQuery.toLowerCase()}_${maxResults}`;
+    const cached = imageSearchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < IMAGE_SEARCH_CACHE_TTL_MS) {
+      return res.json({ success: true, images: cached.images, cached: true });
+    }
+
+    const searchParams = new URLSearchParams({
+      key: apiKey,
+      cx,
+      q: cleanQuery,
+      searchType: "image",
+      safe: "active",
+      num: String(maxResults),
+    });
+
+    const searchRes = await fetch(`https://www.googleapis.com/customsearch/v1?${searchParams.toString()}`);
+    if (!searchRes.ok) {
+      if (searchRes.status === 403 || searchRes.status === 429) {
+        return res.status(429).json({
+          success: false,
+          error: "Google Custom Search quota exceeded or access forbidden. Please try again later.",
+        });
+      }
+      const errBody = await searchRes.json().catch(() => ({} as any));
+      return res.status(502).json({ success: false, error: errBody?.error?.message || "Image search request failed." });
+    }
+    const searchData = await searchRes.json();
+
+    const images = (searchData.items || [])
+      .filter((item: any) => item.link)
+      .map((item: any) => ({
+        url: item.link as string,
+        thumbnailUrl: item.image?.thumbnailLink as string | undefined,
+        title: (item.title as string) || cleanQuery,
+        sourceUrl: (item.image?.contextLink as string) || (item.link as string),
+      }));
+
+    imageSearchCache.set(cacheKey, { timestamp: Date.now(), images });
+    res.json({ success: true, images });
+  } catch (error: any) {
+    console.error("Image search error:", error);
+    res.status(500).json({ success: false, error: error.message || "Image search failed." });
+  }
+});
+
+// ==================== KNOWLEDGE INTAKE — deterministic extraction (no LLM below, until noted) ==================== //
+
+// Server-side cache to avoid re-fetching/re-parsing the same URL within a session (mirrors the
+// YouTube search cache above).
+const intakeFetchCache = new Map<string, { timestamp: number; result: any }>();
+const INTAKE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function isDisallowedIp(ip: string): boolean {
+  if (net.isIPv6(ip)) {
+    const lower = ip.toLowerCase();
+    return lower === "::1" || lower.startsWith("fe80:") || lower.startsWith("fc") || lower.startsWith("fd");
+  }
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return true; // malformed -> block
+  const [a, b] = parts;
+  if (a === 127 || a === 10 || a === 0) return true; // loopback / private / "this network"
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata endpoints
+  return false;
+}
+
+// SSRF guard for user-supplied URLs: only http(s), no loopback/private/link-local hosts, and the
+// hostname must actually resolve to a public IP (defense against DNS rebinding to internal
+// services). Not a full DNS-pinning solution, but a reasonable bar for this app's threat model.
+async function assertUrlIsSafeToFetch(rawUrl: string): Promise<URL> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("That doesn't look like a valid URL.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only http/https URLs are supported.");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "0.0.0.0") {
+    throw new Error("This URL is not allowed.");
+  }
+  if (net.isIP(hostname)) {
+    if (isDisallowedIp(hostname)) throw new Error("This URL is not allowed.");
+    return parsed;
+  }
+  const records = await dns.lookup(hostname, { all: true }).catch(() => []);
+  if (records.length === 0 || records.some((r) => isDisallowedIp(r.address))) {
+    throw new Error("This URL could not be resolved to a public address.");
+  }
+  return parsed;
+}
+
+// Fetches a URL with a size cap, timeout, and a manually-walked (re-validated) redirect chain.
+async function safeFetchText(
+  startUrl: string,
+  maxBytes = 3_000_000,
+  timeoutMs = 15000,
+  maxRedirects = 3
+): Promise<{ finalUrl: string; body: string }> {
+  let currentUrl = startUrl;
+  for (let i = 0; i <= maxRedirects; i++) {
+    await assertUrlIsSafeToFetch(currentUrl);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response: globalThis.Response;
+    try {
+      response = await fetch(currentUrl, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; AINoteMakerBot/1.0; +intake)" },
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Redirect response had no location header.");
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+    if (!response.ok) throw new Error(`Fetching this URL failed (status ${response.status}).`);
+
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType && !/text\/html|application\/xhtml|text\/plain/i.test(contentType)) {
+      throw new Error("This URL did not return readable text/HTML content.");
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      const text = await response.text();
+      return { finalUrl: currentUrl, body: text.slice(0, maxBytes) };
+    }
+    let received = 0;
+    const chunks: Buffer[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      chunks.push(Buffer.from(value));
+      if (received > maxBytes) break;
+    }
+    return { finalUrl: currentUrl, body: Buffer.concat(chunks).toString("utf-8").slice(0, maxBytes) };
+  }
+  throw new Error("Too many redirects.");
+}
+
+function extractYouTubeVideoId(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl);
+    if (!/(^|\.)youtu\.be$/.test(u.hostname) && !/(^|\.)youtube\.com$/.test(u.hostname)) return null;
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1) || null;
+    if (u.pathname === "/watch") return u.searchParams.get("v");
+    const shortsMatch = u.pathname.match(/^\/shorts\/([^/]+)/);
+    if (shortsMatch) return shortsMatch[1];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Deterministic source extraction for the Knowledge Intake pipeline. Web pages go through
+// Readability (self-hosted, no third-party service sees the URL); YouTube uses the same official
+// Data API v3 already used by /api/youtube/search — metadata only (title/description/tags), no
+// transcript, since transcripts have no official-API path for third-party videos and this
+// project deliberately doesn't scrape.
+app.post("/api/intake/fetch-url", async (req: Request, res: Response) => {
+  try {
+    const { url } = req.body || {};
+    if (!url || typeof url !== "string" || !url.trim()) {
+      return res.status(400).json({ success: false, error: "A URL is required." });
+    }
+    const cacheKey = url.trim();
+
+    const cached = intakeFetchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < INTAKE_CACHE_TTL_MS) {
+      return res.json({ success: true, ...cached.result, cached: true });
+    }
+
+    const youtubeId = extractYouTubeVideoId(cacheKey);
+    let result: { sourceType: "youtube" | "web"; title: string; text: string; originUrl: string };
+
+    if (youtubeId) {
+      const apiKey = process.env.YOUTUBE_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          success: false,
+          error: "YouTube sources require YOUTUBE_API_KEY to be configured on the server.",
+        });
+      }
+      const videosRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${encodeURIComponent(youtubeId)}&key=${apiKey}`
+      );
+      const videosData = await videosRes.json();
+      const video = videosData.items?.[0];
+      if (!video) {
+        return res.status(404).json({ success: false, error: "YouTube video not found or unavailable." });
+      }
+      const snippet = video.snippet || {};
+      result = {
+        sourceType: "youtube",
+        title: snippet.title || "YouTube video",
+        text: [
+          `Title: ${snippet.title || ""}`,
+          `Channel: ${snippet.channelTitle || ""}`,
+          `Description: ${(snippet.description || "").slice(0, 4000)}`,
+          snippet.tags?.length ? `Tags: ${snippet.tags.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        originUrl: cacheKey,
+      };
+    } else {
+      const { body, finalUrl } = await safeFetchText(cacheKey);
+      const dom = new JSDOM(body, { url: finalUrl });
+      const article = new Readability(dom.window.document).parse();
+      if (!article || !article.textContent || article.textContent.trim().length < 50) {
+        return res.status(422).json({ success: false, error: "Could not extract readable content from this URL." });
+      }
+      result = {
+        sourceType: "web",
+        title: article.title || finalUrl,
+        text: article.textContent.trim().slice(0, 50000),
+        originUrl: cacheKey,
+      };
+    }
+
+    intakeFetchCache.set(cacheKey, { timestamp: Date.now(), result });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error("Intake fetch-url error:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to fetch and extract this URL." });
+  }
+});
+
+// ==================== KNOWLEDGE INTAKE — AI calls from here down ==================== //
+
+// The main LLM call in the Knowledge Intake pipeline. Everything upstream (extraction,
+// chunking, BM25 retrieval, confidence scoring) already happened client-side — `sources` here is
+// already the token-budgeted, retrieval-filtered context, not raw source dumps. Reuses the exact
+// RoadmapTopic shape ({title, description, estimatedMinutes}) so the result plugs directly into
+// the existing RoadmapEditor / GenerationContext flow with no changes there.
+app.post("/api/ai/intake-brief", async (req: Request, res: Response) => {
+  try {
+    const { prompt, sources, learnerLevel, complexity, depth, language, priorQuestions, priorAnswers } = req.body || {};
+    const ai = getGenAI(req);
+
+    const sourcesBlock = (sources || [])
+      .map((s: any, idx: number) => {
+        const chunkText = (s.chunks || [])
+          .map((c: any) => (c.heading ? `[${c.heading}] ${c.text}` : c.text))
+          .join("\n");
+        return `Source ${idx + 1} (${s.sourceType}): "${s.title}"\n${chunkText}`;
+      })
+      .join("\n\n");
+
+    const clarificationBlock =
+      Array.isArray(priorQuestions) && Array.isArray(priorAnswers) && priorQuestions.length > 0
+        ? `\nThe user already answered these clarifying questions — use the answers, don't re-ask them:\n${priorQuestions
+            .map((q: string, i: number) => `Q: ${q}\nA: ${priorAnswers[i] || ""}`)
+            .join("\n")}`
+        : "";
+
+    const promptText = `
+A student wants study notes generated. Turn their request and any source material below into a precise generation brief.
+
+User's request: "${prompt || ""}"
+${learnerLevel ? `Preferred learner level: ${learnerLevel}` : ""}
+${complexity ? `Preferred complexity: ${complexity}` : ""}
+${depth ? `Preferred depth: ${depth}` : ""}
+${language ? `Preferred language: ${language}` : ""}
+${clarificationBlock}
+
+Retrieved source material (already filtered to the most relevant excerpts — treat as ground truth, do not invent facts beyond it):
+${sourcesBlock || "(no source material provided — rely on the request alone)"}
+
+Produce:
+1. subject / mainTopic — concise and specific.
+2. learnerLevel — one of: School, Diploma, Undergraduate, Postgraduate, Professional, General learner (infer if unstated; default Undergraduate).
+3. complexity — one of: Beginner, Easy, Medium, Advanced, Expert (default Medium).
+4. depth — one of: Quick revision, Standard notes, Detailed notes, Exam preparation (default Standard notes).
+5. language — one of: English, Hindi, Gujarati, Spanish, French, German, Other (default English).
+6. instructions — a dense, compressed brief (bullet-style facts, terminology, and must-cover points drawn from the source material and the request). This is the ONLY place source content survives into note generation and gets re-sent for every topic, so it must be information-dense, not a restatement of the request.
+7. topics — 6 to 10 sequential study topics (title + 1-2 sentence description + estimatedMinutes), grounded in the source material when present.
+8. confidence — 0 to 100: how confident you are this brief reflects what the user actually wants, given how specific the request was and how much relevant source material was provided.
+9. clarifyingQuestions — 0 to 2 short, high-value questions, ONLY if confidence is below 70 and an answer would meaningfully change the output. Empty array if confidence is already high.
+    `;
+
+    const response = await generateWithRetry(ai, {
+      model: "gemini-3.6-flash",
+      contents: promptText,
+      config: {
+        systemInstruction:
+          "You are an expert curriculum designer. Distill user intent and source material into a precise, compressed generation brief. Return ONLY valid JSON.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            subject: { type: Type.STRING },
+            mainTopic: { type: Type.STRING },
+            learnerLevel: { type: Type.STRING },
+            complexity: { type: Type.STRING },
+            depth: { type: Type.STRING },
+            language: { type: Type.STRING },
+            instructions: { type: Type.STRING },
+            topics: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  estimatedMinutes: { type: Type.NUMBER },
+                },
+                required: ["title", "description"],
+              },
+            },
+            confidence: { type: Type.NUMBER },
+            clarifyingQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+          },
+          required: ["subject", "instructions", "topics", "confidence"],
+        },
+      },
+    });
+
+    const parsed = safeJsonParse<any>(response.text || "{}", null);
+    if (!parsed || !parsed.subject || !Array.isArray(parsed.topics) || parsed.topics.length === 0) {
+      return res.status(500).json({
+        success: false,
+        error: "AI could not produce a generation brief from this input. Try adding more detail or source material.",
+      });
+    }
+
+    res.json({
+      success: true,
+      brief: {
+        ...parsed,
+        clarifyingQuestions: Array.isArray(parsed.clarifyingQuestions) ? parsed.clarifyingQuestions.slice(0, 2) : [],
+      },
+    });
+  } catch (error: any) {
+    console.error("Intake brief error:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to generate intake brief" });
+  }
+});
+
+// Server-side cache to avoid re-summarizing the same source content within a session/TTL —
+// summaries only run when a user explicitly saves a source (not automatically on add), so this
+// mainly protects against saving, deleting, and re-saving the same thing.
+const sourceSummaryCache = new Map<string, { timestamp: number; summary: string; keyPoints: string[] }>();
+const SOURCE_SUMMARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SOURCE_SUMMARY_INPUT_CHAR_CAP = 3000; // keep the input tight — this is a per-resource preview, not a full analysis
+
+// A second, small LLM call — separate from /api/ai/intake-brief — that summarizes ONE resource
+// on its own so a user can read/save "what's in this PDF/link" without running the combined
+// multi-source analysis. Only called when a source is explicitly saved (see IntakeWizard.tsx),
+// never automatically when a source is added, to keep this additive call bounded to deliberate
+// user intent. Both the prompt input and the requested output are deliberately short to keep
+// token usage minimal for what's meant to be a quick preview, not a deep analysis.
+app.post("/api/ai/summarize-source", async (req: Request, res: Response) => {
+  try {
+    const { title, text, sourceType } = req.body || {};
+    const cleanText = (text || "").trim();
+    if (!cleanText) {
+      return res.status(400).json({ success: false, error: "No text to summarize." });
+    }
+
+    const cappedText = cleanText.slice(0, SOURCE_SUMMARY_INPUT_CHAR_CAP);
+    const cacheKey = `${(title || "").toLowerCase()}_${cappedText.length}_${cappedText.slice(0, 200)}`;
+    const cached = sourceSummaryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < SOURCE_SUMMARY_CACHE_TTL_MS) {
+      return res.json({ success: true, summary: cached.summary, keyPoints: cached.keyPoints, cached: true });
+    }
+
+    const ai = getGenAI(req);
+    const promptText = `
+Summarize this ${sourceType || "source"} titled "${title || "Untitled"}" for a student deciding whether to use it as study material.
+
+Content:
+"${cappedText}"
+
+Be extremely concise — 2-3 sentences maximum for the summary, do not restate the content verbatim.
+    `;
+
+    const response = await generateWithRetry(ai, {
+      model: "gemini-3.6-flash",
+      contents: promptText,
+      config: {
+        systemInstruction: "You produce short, information-dense source summaries. Return ONLY valid JSON. Never pad with filler.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING, description: "2-3 sentence overview, maximum" },
+            keyPoints: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "3-5 short key-point bullets, each under 12 words",
+            },
+          },
+          required: ["summary", "keyPoints"],
+        },
+      },
+    });
+
+    const parsed = safeJsonParse<any>(response.text || "{}", null);
+    if (!parsed || !parsed.summary) {
+      return res.status(500).json({ success: false, error: "AI could not summarize this source." });
+    }
+
+    const keyPoints = Array.isArray(parsed.keyPoints) ? parsed.keyPoints.slice(0, 5) : [];
+    sourceSummaryCache.set(cacheKey, { timestamp: Date.now(), summary: parsed.summary, keyPoints });
+    res.json({ success: true, summary: parsed.summary, keyPoints });
+  } catch (error: any) {
+    console.error("Source summary error:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to summarize source" });
   }
 });
 

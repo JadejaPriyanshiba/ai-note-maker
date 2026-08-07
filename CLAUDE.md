@@ -45,7 +45,7 @@ Operating notes for AI coding assistants working in this repository. This file i
 
 **Add a new Shorts Learning content source** (e.g. Instagram): implement `ContentProvider` (`src/lib/providers/ContentProvider.ts`) using `YouTubeProvider.ts` as the reference implementation, then `providerRegistry.register(...)`. Don't touch `learningService.ts` call sites — they resolve providers by name through the registry.
 
-**Modify note block rendering/generation:** the block model is `BlockType`/`NoteBlock` in `types.ts`, generated server-side in the `/api/ai/topic-notes` route, and rendered in `src/components/NoteStudio/`. Changing the set of block types requires updating all three in lockstep, plus the `responseSchema` in `server.ts`.
+**Modify note block rendering/generation:** the block model is `BlockType`/`NoteBlock` in `types.ts`, generated server-side in the `/api/ai/topic-notes` route, and rendered in `src/components/NoteStudio/`. Changing the set of AI-generated block types requires updating all three in lockstep, plus the `responseSchema` in `server.ts`. One exception: `image_gallery` blocks are appended deterministically by `GenerationContext.tsx` after each topic's AI response (via `/api/images/search`, not Gemini) — they're not in `topic-notes`'s `responseSchema` and never will be. Any new block type still needs rendering added in all three `NoteStudio.tsx` block-render spots (main editor, full-screen reading mode, `generateNoteStudioHTML`) plus the TXT export and the `CommunityView.tsx` preview snippet.
 
 ## Context-loading shortcuts by task type
 

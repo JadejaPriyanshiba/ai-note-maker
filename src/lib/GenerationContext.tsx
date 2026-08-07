@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from "react";
 import { NoteDocument, NoteSection } from "../types";
 import { generateTopicNotes } from "./aiService";
+import { searchTopicImages } from "./imageSearchService";
 import { saveNote } from "./storage";
 
 export interface GenerationState {
@@ -99,15 +100,34 @@ export const GenerationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           throw new Error(`AI generated an empty response for topic "${topic.title}".`);
         }
 
+        const sectionBlocks = (notesResult.blocks || []).map((b, bIdx) => ({
+          ...b,
+          id: `b_${Date.now()}_${bIdx}`,
+        }));
+
+        // Reference images are a non-critical enhancement — a search failure (no API key,
+        // quota exhausted, network error) must never fail the topic itself, so this is fully
+        // isolated from the retry/error handling above.
+        try {
+          const images = await searchTopicImages(`${topic.title} ${currentNoteState.subject} diagram`, 3);
+          if (images.length > 0) {
+            sectionBlocks.push({
+              id: `b_${Date.now()}_images`,
+              type: "image_gallery",
+              content: "",
+              images,
+            });
+          }
+        } catch (imgErr) {
+          console.warn(`[Topic Images] Skipping reference images for "${topic.title}":`, imgErr);
+        }
+
         const newSection: NoteSection = {
           id: `sec_${Date.now()}_${i}`,
           topicId: topic.id,
           title: topic.title,
           summary: notesResult.summary,
-          blocks: (notesResult.blocks || []).map((b, bIdx) => ({
-            ...b,
-            id: `b_${Date.now()}_${bIdx}`,
-          })),
+          blocks: sectionBlocks,
         };
 
         const completedRoadmap = (currentNoteState.roadmap || []).map((t, idx) =>
