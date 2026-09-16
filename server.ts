@@ -475,6 +475,8 @@ function extractYouTubeVideoId(rawUrl: string): string | null {
     if (u.pathname === "/watch") return u.searchParams.get("v");
     const shortsMatch = u.pathname.match(/^\/shorts\/([^/]+)/);
     if (shortsMatch) return shortsMatch[1];
+    const liveMatch = u.pathname.match(/^\/live\/([^/]+)/);
+    if (liveMatch) return liveMatch[1];
     return null;
   } catch {
     return null;

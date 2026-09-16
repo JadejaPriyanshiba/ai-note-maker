@@ -1,15 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import React, { useEffect, useState } from "react";
 import {
   Sparkles,
-  FileText,
-  Link2,
-  Youtube,
-  AlignLeft,
   X,
   Loader2,
   AlertTriangle,
-  CheckCircle2,
   Bookmark,
   BookmarkCheck,
   ArrowRight,
@@ -17,39 +11,29 @@ import {
   ArrowLeft,
   ChevronDown,
   History,
-  Code2,
+  Settings2,
 } from "lucide-react";
 import { Modal } from "../Modal";
-import { LearnerLevel, Complexity, Depth, NoteLanguage, KnowledgeSource, KnowledgeSourceType, IntakeSummary } from "../../types";
-import { generateIntakeBrief, IntakeBrief, summarizeSource } from "../../lib/aiService";
-import { fetchUrlSource } from "../../lib/intake/api";
-import { extractPdfText } from "../../lib/intake/pdfExtractor";
-import { buildExtractedSource, dedupeSources, countWords } from "../../lib/intake/normalize";
-import { chunkSource, chunkSources } from "../../lib/intake/chunk";
+import { LearnerLevel, Complexity, Depth, NoteLanguage, IntakeSummary, NoteGenerationPreset } from "../../types";
+import { generateIntakeBrief, IntakeBrief } from "../../lib/aiService";
+import { dedupeSources } from "../../lib/intake/normalize";
 import { assembleContext } from "../../lib/intake/assemble";
-import { computeConfidence } from "../../lib/intake/confidence";
-import { ExtractedSource } from "../../lib/intake/types";
+import { useSourceIntake, nextLocalId } from "../../lib/intake/useSourceIntake";
 import {
-  getKnowledgeSources,
-  saveKnowledgeSource,
-  deleteKnowledgeSource,
   getIntakeSummaries,
   saveIntakeSummary,
   deleteIntakeSummary,
+  getNoteGenerationPresets,
+  saveNoteGenerationPreset,
+  deleteNoteGenerationPreset,
 } from "../../lib/storage";
+import { SourceCollectorPanel } from "./SourceCollectorPanel";
+import { PresetPicker } from "../PresetPicker";
 
-interface WizardSource {
-  id: string;
-  sourceType: KnowledgeSourceType;
-  title: string;
-  status: "extracting" | "ready" | "error";
-  errorMessage?: string;
-  extracted?: ExtractedSource;
-  savedAs?: string; // KnowledgeSource id, if this came from (or was saved to) the saved-sources library
-  summary?: string; // set once saved — the AI-generated per-resource summary
-  keyPoints?: string[];
-  isSaving?: boolean; // true while the save-time summarize call is in flight
-}
+const LEARNER_LEVELS: LearnerLevel[] = ["School", "Diploma", "Undergraduate", "Postgraduate", "Professional", "General learner"];
+const COMPLEXITIES: Complexity[] = ["Beginner", "Easy", "Medium", "Advanced", "Expert"];
+const DEPTHS: Depth[] = ["Quick revision", "Standard notes", "Detailed notes", "Exam preparation"];
+const LANGUAGES: NoteLanguage[] = ["English", "Hindi", "Gujarati", "Spanish", "French", "German", "Other"];
 
 interface IntakeWizardProps {
   isOpen: boolean;
@@ -69,42 +53,6 @@ interface IntakeWizardProps {
   initialExpandSaved?: boolean;
 }
 
-const sourceIcon: Record<KnowledgeSourceType, React.ElementType> = {
-  pdf: FileText,
-  web: Link2,
-  youtube: Youtube,
-  text: AlignLeft,
-};
-
-let localIdCounter = 0;
-function nextLocalId(prefix: string): string {
-  localIdCounter += 1;
-  return `${prefix}_${Date.now()}_${localIdCounter}`;
-}
-
-// Technical/debug view — shows exactly what the deterministic pipeline (chunk.ts) produces for
-// this source, with no AI involved. Purely for inspection, nothing here is interactive/editable.
-const RawChunksView: React.FC<{ source: ExtractedSource }> = ({ source }) => {
-  const chunks = useMemo(() => chunkSource(source), [source]);
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[11px] text-zinc-400 font-mono">
-        {source.wordCount.toLocaleString()} words • {chunks.length} chunk{chunks.length === 1 ? "" : "s"} • hash {source.contentHash}
-      </p>
-      <div className="space-y-1.5 max-h-48 overflow-y-auto">
-        {chunks.map((c) => (
-          <div key={c.id} className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">
-              {c.heading || "(no heading)"} · {c.wordCount}w
-            </p>
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 font-mono">{c.text}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 export const IntakeWizard: React.FC<IntakeWizardProps> = ({
   isOpen,
   onClose,
@@ -112,19 +60,10 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({
   initialSummaryToResume,
   initialExpandSaved,
 }) => {
+  const intake = useSourceIntake();
   const [step, setStep] = useState<"input" | "clarify" | "result">("input");
-  const [prompt, setPrompt] = useState("");
-  const [sources, setSources] = useState<WizardSource[]>([]);
-  const [urlInput, setUrlInput] = useState("");
-  const [pasteText, setPasteText] = useState("");
-  const [showPaste, setShowPaste] = useState(false);
-  const [savedSources, setSavedSources] = useState<KnowledgeSource[]>([]);
-  const [showSaved, setShowSaved] = useState(false);
   const [savedSummaries, setSavedSummaries] = useState<IntakeSummary[]>([]);
   const [showSavedSummaries, setShowSavedSummaries] = useState(false);
-  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
-  const [expandedSourceTab, setExpandedSourceTab] = useState<"summary" | "raw">("summary");
-  const [expandedSavedSourceId, setExpandedSavedSourceId] = useState<string | null>(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,184 +71,92 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({
   const [answers, setAnswers] = useState<string[]>(["", ""]);
   const [summarySaved, setSummarySaved] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Optional constraints on the intake-brief call — left unset ("Auto") lets the AI infer them as
+  // it always has. generateIntakeBrief already accepts all four server-side as "Preferred X" hints
+  // (server.ts), they just weren't wired up client-side until now.
+  const [showSettings, setShowSettings] = useState(false);
+  const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
+  const [complexity, setComplexity] = useState<Complexity | "">("");
+  const [depthOverride, setDepthOverride] = useState<Depth | "">("");
+  const [languageOverride, setLanguageOverride] = useState<NoteLanguage | "">("");
+  const [instructions, setInstructions] = useState("");
+  const [presets, setPresets] = useState<NoteGenerationPreset[]>([]);
 
   useEffect(() => {
     if (isOpen) {
-      setSavedSources(getKnowledgeSources());
+      intake.loadSavedSources();
       setSavedSummaries(getIntakeSummaries());
+      setPresets(getNoteGenerationPresets());
       if (initialSummaryToResume) {
         resumeSavedSummary(initialSummaryToResume);
       }
       if (initialExpandSaved) {
-        setShowSaved(true);
+        intake.setShowSaved(true);
       }
     } else {
       // Reset for next open — the wizard is intentionally ephemeral by default.
       setStep("input");
-      setPrompt("");
-      setSources([]);
-      setUrlInput("");
-      setPasteText("");
-      setShowPaste(false);
+      intake.reset();
       setShowSavedSummaries(false);
-      setExpandedSourceId(null);
-      setExpandedSourceTab("summary");
-      setExpandedSavedSourceId(null);
       setError(null);
       setBrief(null);
       setAnswers(["", ""]);
       setSummarySaved(false);
+      setShowSettings(false);
+      setLearnerLevel("");
+      setComplexity("");
+      setDepthOverride("");
+      setLanguageOverride("");
+      setInstructions("");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  const readySources = sources.filter((s) => s.status === "ready" && s.extracted);
-  const isBusy = sources.some((s) => s.status === "extracting");
-
-  // Live, purely deterministic coverage estimate — helps the user judge "do I need more source
-  // material" before spending an AI call, without calling the model at all.
-  const confidencePreview = useMemo(() => {
-    const extracted = readySources.map((s) => s.extracted!);
-    const chunks = chunkSources(dedupeSources(extracted));
-    return computeConfidence(prompt, chunks);
-  }, [readySources, prompt]);
-
-  function upsertSource(update: WizardSource) {
-    setSources((prev) => {
-      const idx = prev.findIndex((s) => s.id === update.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = update;
-        return next;
-      }
-      return [...prev, update];
-    });
+  function loadNotePreset(preset: NoteGenerationPreset) {
+    setLearnerLevel(preset.learnerLevel);
+    setComplexity(preset.complexity);
+    setDepthOverride(preset.depth);
+    setLanguageOverride(preset.language);
+    setInstructions(preset.instructions || "");
+    setShowSettings(true);
   }
 
-  async function handleFiles(files: FileList | null) {
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) continue;
-      const id = nextLocalId("pdf");
-      upsertSource({ id, sourceType: "pdf", title: file.name, status: "extracting" });
-      try {
-        const { text } = await extractPdfText(file);
-        if (countWords(text) < 20) {
-          throw new Error("No extractable text found (this may be a scanned/image-only PDF).");
-        }
-        const extracted = buildExtractedSource(id, "pdf", file.name, text, { fileName: file.name });
-        upsertSource({ id, sourceType: "pdf", title: file.name, status: "ready", extracted });
-      } catch (err: any) {
-        upsertSource({ id, sourceType: "pdf", title: file.name, status: "error", errorMessage: err.message || "Failed to read this PDF." });
-      }
-    }
-  }
-
-  async function handleAddUrl() {
-    const url = urlInput.trim();
-    if (!url) return;
-    setUrlInput("");
-    const id = nextLocalId("url");
-    upsertSource({ id, sourceType: "web", title: url, status: "extracting" });
-    try {
-      const result = await fetchUrlSource(url);
-      const extracted = buildExtractedSource(id, result.sourceType, result.title, result.text, { originUrl: result.originUrl });
-      upsertSource({ id, sourceType: result.sourceType, title: result.title, status: "ready", extracted });
-    } catch (err: any) {
-      upsertSource({ id, sourceType: "web", title: url, status: "error", errorMessage: err.message || "Failed to fetch this URL." });
-    }
-  }
-
-  function handleAddPastedText() {
-    const text = pasteText.trim();
-    if (!text) return;
-    const id = nextLocalId("text");
-    const title = `Pasted text (${countWords(text)} words)`;
-    const extracted = buildExtractedSource(id, "text", title, text);
-    upsertSource({ id, sourceType: "text", title, status: "ready", extracted });
-    setPasteText("");
-    setShowPaste(false);
-  }
-
-  function toggleSavedSource(source: KnowledgeSource) {
-    const existing = sources.find((s) => s.savedAs === source.id);
-    if (existing) {
-      setSources((prev) => prev.filter((s) => s.id !== existing.id));
-      return;
-    }
-    const id = nextLocalId("saved");
-    const extracted = buildExtractedSource(id, source.sourceType, source.title, source.brief, {
-      originUrl: source.originUrl,
-      fileName: source.fileName,
-    });
-    upsertSource({ id, sourceType: source.sourceType, title: source.title, status: "ready", extracted, savedAs: source.id });
-  }
-
-  function removeSource(id: string) {
-    setSources((prev) => prev.filter((s) => s.id !== id));
-  }
-
-  // Generates a real per-resource AI summary — only at the moment of saving, never automatically
-  // when a source is added, so this additive AI call stays bounded to deliberate user intent. On
-  // a summarization failure, still saves (with a short raw excerpt as a fallback) rather than
-  // losing the source entirely — only the summary/excerpt is persisted, never the full raw text,
-  // to stay well under Firestore's document size limit.
-  async function saveSourceForLater(wizardSource: WizardSource) {
-    if (!wizardSource.extracted || wizardSource.savedAs || wizardSource.isSaving) return;
-    upsertSource({ ...wizardSource, isSaving: true });
-
-    let summary: string;
-    let keyPoints: string[] = [];
-    try {
-      const result = await summarizeSource({
-        title: wizardSource.title,
-        text: wizardSource.extracted.text,
-        sourceType: wizardSource.sourceType,
-      });
-      summary = result.summary;
-      keyPoints = result.keyPoints;
-    } catch (err: any) {
-      summary =
-        wizardSource.extracted.text.length > 500
-          ? wizardSource.extracted.text.slice(0, 500) + "…"
-          : wizardSource.extracted.text;
-      setError(`Couldn't generate an AI summary for "${wizardSource.title}" (saved with a raw excerpt instead): ${err.message || "unknown error"}`);
-    }
-
-    const saved = saveKnowledgeSource({
-      id: nextLocalId("ksrc"),
-      sourceType: wizardSource.sourceType,
-      title: wizardSource.title,
-      originUrl: wizardSource.extracted.originUrl,
-      fileName: wizardSource.extracted.fileName,
-      brief: summary,
-      keyPoints,
-      wordCount: wizardSource.extracted.wordCount,
-      contentHash: wizardSource.extracted.contentHash,
+  function saveNotePreset(name: string) {
+    const saved = saveNoteGenerationPreset({
+      id: nextLocalId("npreset"),
+      name,
+      learnerLevel: learnerLevel || "Undergraduate",
+      complexity: complexity || "Medium",
+      depth: depthOverride || "Standard notes",
+      language: languageOverride || "English",
+      instructions: instructions.trim() || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    setSavedSources((prev) => [saved, ...prev]);
-    upsertSource({ ...wizardSource, savedAs: saved.id, summary, keyPoints, isSaving: false });
+    setPresets((prev) => [saved, ...prev]);
   }
 
-  function deleteSavedSource(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    deleteKnowledgeSource(id);
-    setSavedSources((prev) => prev.filter((s) => s.id !== id));
-    setSources((prev) => prev.map((s) => (s.savedAs === id ? { ...s, savedAs: undefined } : s)));
-    if (expandedSavedSourceId === id) setExpandedSavedSourceId(null);
+  function deleteNotePreset(id: string) {
+    deleteNoteGenerationPreset(id);
+    setPresets((prev) => prev.filter((p) => p.id !== id));
   }
 
   async function runAnalysis(priorQuestions?: string[], priorAnswers?: string[]) {
     setError(null);
     setIsAnalyzing(true);
     try {
-      const extracted = dedupeSources(readySources.map((s) => s.extracted!));
-      const assembled = assembleContext(extracted, prompt);
+      const extracted = dedupeSources(intake.readySources.map((s) => s.extracted!));
+      const combinedPrompt = [intake.prompt.trim(), instructions.trim() ? `Style preferences: ${instructions.trim()}` : ""]
+        .filter(Boolean)
+        .join("\n\n");
+      const assembled = assembleContext(extracted, combinedPrompt);
       const result = await generateIntakeBrief({
-        prompt: prompt.trim(),
+        prompt: combinedPrompt,
         sources: assembled.sources,
+        learnerLevel: learnerLevel || undefined,
+        complexity: complexity || undefined,
+        depth: depthOverride || undefined,
+        language: languageOverride || undefined,
         priorQuestions,
         priorAnswers,
       });
@@ -362,8 +209,8 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({
       summary: brief.instructions,
       topics: brief.topics,
       confidence: brief.confidence,
-      sourceTitles: readySources.map((s) => s.title),
-      prompt: prompt.trim() || undefined,
+      sourceTitles: intake.readySources.map((s) => s.title),
+      prompt: intake.prompt.trim() || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -395,7 +242,7 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({
     setSavedSummaries((prev) => prev.filter((s) => s.id !== id));
   }
 
-  const canAnalyze = !isBusy && !isAnalyzing && (prompt.trim().length > 0 || readySources.length > 0);
+  const canAnalyze = !intake.isBusy && !isAnalyzing && (intake.prompt.trim().length > 0 || intake.readySources.length > 0);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} panelClassName="max-w-2xl">
@@ -417,178 +264,15 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({
           </button>
         </div>
 
-        {error && (
+        {(error || intake.saveError) && (
           <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-300 text-xs font-medium flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
+            <span>{error || intake.saveError}</span>
           </div>
         )}
 
         {step === "input" && (
           <div className="space-y-4">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder='e.g. "I need exam-ready notes on the attached lecture slides, focused on the practical parts"'
-              rows={3}
-              className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10 resize-none"
-            />
-
-            <div className="flex flex-wrap gap-2">
-              <input ref={fileInputRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5" /> Add PDFs
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPaste((v) => !v)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <AlignLeft className="w-3.5 h-3.5" /> Paste text
-              </button>
-            </div>
-
-            {showPaste && (
-              <div className="flex gap-2">
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  placeholder="Paste any text content here..."
-                  rows={3}
-                  className="flex-1 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white outline-none resize-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddPastedText}
-                  disabled={!pasteText.trim()}
-                  className="shrink-0 px-3 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold disabled:opacity-40"
-                >
-                  Add
-                </button>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <div className="flex-1 flex items-center gap-2 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950">
-                <Link2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <input
-                  type="text"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddUrl())}
-                  placeholder="Paste a web article or YouTube URL..."
-                  className="w-full bg-transparent py-2.5 text-xs font-medium text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 outline-none"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleAddUrl}
-                disabled={!urlInput.trim()}
-                className="shrink-0 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors"
-              >
-                Add link
-              </button>
-            </div>
-
-            {savedSources.length > 0 && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowSaved((v) => !v)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
-                >
-                  <Bookmark className="w-3.5 h-3.5" />
-                  <span>Your saved sources ({savedSources.length})</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSaved ? "rotate-180" : ""}`} />
-                </button>
-                {showSaved && (
-                  <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
-                    {savedSources.map((s) => {
-                      const included = sources.some((w) => w.savedAs === s.id);
-                      const Icon = sourceIcon[s.sourceType];
-                      const isExpanded = expandedSavedSourceId === s.id;
-                      return (
-                        <div
-                          key={s.id}
-                          className={`rounded-lg border overflow-hidden ${
-                            included
-                              ? "bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white"
-                              : "border-zinc-200 dark:border-zinc-700"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleSavedSource(s)}
-                            className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-xs transition-colors ${
-                              included
-                                ? "text-white dark:text-zinc-900"
-                                : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                            }`}
-                          >
-                            <Icon className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate flex-1 font-medium">{s.title}</span>
-                            {included && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setExpandedSavedSourceId(isExpanded ? null : s.id);
-                              }}
-                              className="p-0.5 rounded shrink-0"
-                              title="View saved summary"
-                            >
-                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                            </span>
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => deleteSavedSource(s.id, e)}
-                              className={`p-0.5 rounded shrink-0 ${included ? "hover:text-red-300" : "hover:text-red-600 dark:hover:text-red-400"}`}
-                              title="Delete this saved source"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </span>
-                          </button>
-                          {isExpanded && (
-                            <div
-                              className={`px-2.5 pb-2.5 pt-1 space-y-1.5 border-t ${
-                                included ? "border-white/20 dark:border-zinc-900/20" : "border-zinc-100 dark:border-zinc-800"
-                              }`}
-                            >
-                              <p className={`text-[11px] leading-relaxed ${included ? "text-white/90 dark:text-zinc-900/90" : "text-zinc-600 dark:text-zinc-400"}`}>
-                                {s.brief}
-                              </p>
-                              {s.keyPoints && s.keyPoints.length > 0 && (
-                                <ul className="space-y-1">
-                                  {s.keyPoints.map((kp, idx) => (
-                                    <li
-                                      key={idx}
-                                      className={`flex items-start gap-1.5 text-[10px] ${included ? "text-white/80 dark:text-zinc-900/80" : "text-zinc-500 dark:text-zinc-500"}`}
-                                    >
-                                      <span className="w-1 h-1 rounded-full bg-current shrink-0 mt-1.5" />
-                                      <span>{kp}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              <p className={`text-[10px] ${included ? "text-white/60 dark:text-zinc-900/60" : "text-zinc-400"}`}>
-                                {s.wordCount.toLocaleString()} words • saved {new Date(s.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
             {savedSummaries.length > 0 && (
               <div>
                 <button
@@ -630,139 +314,96 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({
               </div>
             )}
 
-            {sources.length > 0 && (
-              <div className="space-y-1.5">
-                {sources.map((s) => {
-                  const Icon = sourceIcon[s.sourceType];
-                  const isExpanded = expandedSourceId === s.id;
-                  return (
-                    <div
-                      key={s.id}
-                      className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 overflow-hidden"
-                    >
-                      <div className="flex items-center gap-2.5 px-3 py-2">
-                        <Icon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{s.title}</p>
-                          {s.status === "error" && <p className="text-[11px] text-red-600 dark:text-red-400">{s.errorMessage}</p>}
-                          {s.status === "ready" && s.extracted && (
-                            <p className="text-[11px] text-zinc-400">{s.extracted.wordCount.toLocaleString()} words</p>
-                          )}
-                        </div>
-                        {s.status === "extracting" && <Loader2 className="w-3.5 h-3.5 text-zinc-400 animate-spin shrink-0" />}
-                        {s.status === "ready" && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedSourceId(isExpanded ? null : s.id);
-                              setExpandedSourceTab("summary");
-                            }}
-                            title="View summary / raw chunks"
-                            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                          >
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                          </button>
-                        )}
-                        {s.status === "ready" && !s.savedAs && (
-                          <button
-                            type="button"
-                            onClick={() => saveSourceForLater(s)}
-                            disabled={s.isSaving}
-                            title="Save this source — generates an AI summary you can read later"
-                            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-50 transition-colors"
-                          >
-                            {s.isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bookmark className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                        {s.savedAs && (
-                          <span title="Saved to your library">
-                            <BookmarkCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeSource(s.id)}
-                          className="p-1 rounded-lg text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+            <SourceCollectorPanel intake={intake} />
 
-                      {isExpanded && s.extracted && (
-                        <div className="px-3 pb-3 pt-1 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedSourceTab("summary")}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
-                                expandedSourceTab === "summary"
-                                  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-                                  : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                              }`}
-                            >
-                              Summary
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setExpandedSourceTab("raw")}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
-                                expandedSourceTab === "raw"
-                                  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-                                  : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                              }`}
-                              title="Technical view: how the deterministic pipeline chunked this source"
-                            >
-                              <Code2 className="w-3 h-3" /> Raw
-                            </button>
-                          </div>
-
-                          {expandedSourceTab === "summary" ? (
-                            s.summary ? (
-                              <div className="space-y-1.5">
-                                <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">{s.summary}</p>
-                                {s.keyPoints && s.keyPoints.length > 0 && (
-                                  <ul className="space-y-1">
-                                    {s.keyPoints.map((kp, idx) => (
-                                      <li key={idx} className="flex items-start gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
-                                        <span className="w-1 h-1 rounded-full bg-zinc-400 shrink-0 mt-1.5" />
-                                        <span>{kp}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-zinc-400 italic">
-                                No AI summary yet — click the bookmark icon to save this source and generate one.
-                              </p>
-                            )
-                          ) : (
-                            <RawChunksView source={s.extracted} />
-                          )}
-                        </div>
-                      )}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowSettings((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                <span>Generation settings (optional)</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSettings ? "rotate-180" : ""}`} />
+              </button>
+              {showSettings && (
+                <div className="mt-2 space-y-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="space-y-1">
+                      <label className="block font-semibold text-zinc-600 dark:text-zinc-400">Learner Level</label>
+                      <select
+                        value={learnerLevel}
+                        onChange={(e) => setLearnerLevel(e.target.value as LearnerLevel | "")}
+                        className="w-full p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                      >
+                        <option value="">Auto</option>
+                        {LEARNER_LEVELS.map((l) => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div className="space-y-1">
+                      <label className="block font-semibold text-zinc-600 dark:text-zinc-400">Complexity</label>
+                      <select
+                        value={complexity}
+                        onChange={(e) => setComplexity(e.target.value as Complexity | "")}
+                        className="w-full p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                      >
+                        <option value="">Auto</option>
+                        {COMPLEXITIES.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block font-semibold text-zinc-600 dark:text-zinc-400">Depth</label>
+                      <select
+                        value={depthOverride}
+                        onChange={(e) => setDepthOverride(e.target.value as Depth | "")}
+                        className="w-full p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                      >
+                        <option value="">Auto</option>
+                        {DEPTHS.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block font-semibold text-zinc-600 dark:text-zinc-400">Language</label>
+                      <select
+                        value={languageOverride}
+                        onChange={(e) => setLanguageOverride(e.target.value as NoteLanguage | "")}
+                        className="w-full p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
+                      >
+                        <option value="">Auto</option>
+                        {LANGUAGES.map((l) => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-            {(prompt.trim() || readySources.length > 0) && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                  <span>Estimated coverage</span>
-                  <span>{confidencePreview.score}%</span>
-                </div>
-                <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-[width] ${
-                      confidencePreview.score >= 70 ? "bg-emerald-500" : confidencePreview.score >= 40 ? "bg-amber-500" : "bg-red-400"
-                    }`}
-                    style={{ width: `${confidencePreview.score}%` }}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">Instructions (optional)</label>
+                    <input
+                      type="text"
+                      value={instructions}
+                      onChange={(e) => setInstructions(e.target.value)}
+                      placeholder="e.g. Use simple analogies, avoid jargon, focus on exam-relevant points..."
+                      className="w-full p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 outline-none"
+                    />
+                  </div>
+
+                  <PresetPicker
+                    label="Notes"
+                    presets={presets}
+                    onLoad={loadNotePreset}
+                    onSaveNew={saveNotePreset}
+                    onDelete={deleteNotePreset}
                   />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">

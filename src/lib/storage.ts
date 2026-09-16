@@ -19,6 +19,8 @@ import {
   PodcastEpisode,
   KnowledgeSource,
   IntakeSummary,
+  NoteGenerationPreset,
+  ShortsGenerationPreset,
 } from "../types";
 import { auth } from "./firebase";
 import {
@@ -78,6 +80,12 @@ import {
   fetchUserIntakeSummariesFromCloud,
   saveIntakeSummaryToCloud,
   deleteIntakeSummaryFromCloud,
+  fetchUserNoteGenerationPresetsFromCloud,
+  saveNoteGenerationPresetToCloud,
+  deleteNoteGenerationPresetFromCloud,
+  fetchUserShortsGenerationPresetsFromCloud,
+  saveShortsGenerationPresetToCloud,
+  deleteShortsGenerationPresetFromCloud,
 } from "./syncService";
 
 const NOTES_STORAGE_KEY = "ainotemaker_user_notes_v1";
@@ -97,6 +105,8 @@ const SAVED_LEARNING_RESOURCES_KEY = "ainotemaker_saved_learning_resources_v1";
 const PODCASTS_STORAGE_KEY = "ainotemaker_podcasts_v1";
 const KNOWLEDGE_SOURCES_KEY = "ainotemaker_knowledge_sources_v1";
 const INTAKE_SUMMARIES_KEY = "ainotemaker_intake_summaries_v1";
+const NOTE_GENERATION_PRESETS_KEY = "ainotemaker_note_generation_presets_v1";
+const SHORTS_GENERATION_PRESETS_KEY = "ainotemaker_shorts_generation_presets_v1";
 
 // Seed IDs to filter out if present in existing local storage
 const SEED_COLLECTION_IDS = ["col_sem1", "col_cn", "col_unit1"];
@@ -267,6 +277,28 @@ export async function migrateLocalDataToCloud(userId: string): Promise<Migration
       failed
     );
 
+    const noteGenerationPresets = getNoteGenerationPresets();
+    total += noteGenerationPresets.length;
+    uploaded += await uploadBatch(
+      noteGenerationPresets,
+      "Note Generation Preset",
+      (p) => p.name,
+      saveNoteGenerationPresetToCloud,
+      userId,
+      failed
+    );
+
+    const shortsGenerationPresets = getShortsGenerationPresets();
+    total += shortsGenerationPresets.length;
+    uploaded += await uploadBatch(
+      shortsGenerationPresets,
+      "Shorts Generation Preset",
+      (p) => p.name,
+      saveShortsGenerationPresetToCloud,
+      userId,
+      failed
+    );
+
     localStorage.setItem(`ainotemaker_migrated_${userId}`, "true");
     return { success: failed.length === 0, uploaded, total, failed };
   } catch (e) {
@@ -303,6 +335,8 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
       cloudPodcasts,
       cloudKnowledgeSources,
       cloudIntakeSummaries,
+      cloudNoteGenerationPresets,
+      cloudShortsGenerationPresets,
     ] = await Promise.all([
       fetchUserNotesFromCloud(userId),
       fetchUserCollectionsFromCloud(userId),
@@ -322,6 +356,8 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
       fetchUserPodcastsFromCloud(userId),
       fetchUserKnowledgeSourcesFromCloud(userId),
       fetchUserIntakeSummariesFromCloud(userId),
+      fetchUserNoteGenerationPresetsFromCloud(userId),
+      fetchUserShortsGenerationPresetsFromCloud(userId),
     ]);
 
     if (cloudNotes.length > 0) {
@@ -378,6 +414,12 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
     if (cloudIntakeSummaries.length > 0) {
       localStorage.setItem(INTAKE_SUMMARIES_KEY, JSON.stringify(cloudIntakeSummaries));
     }
+    if (cloudNoteGenerationPresets.length > 0) {
+      localStorage.setItem(NOTE_GENERATION_PRESETS_KEY, JSON.stringify(cloudNoteGenerationPresets));
+    }
+    if (cloudShortsGenerationPresets.length > 0) {
+      localStorage.setItem(SHORTS_GENERATION_PRESETS_KEY, JSON.stringify(cloudShortsGenerationPresets));
+    }
 
     return {
       success: true,
@@ -396,6 +438,8 @@ export async function syncAllCloudDataToLocal(userId: string): Promise<CloudSync
         "Podcast Episodes": cloudPodcasts.length,
         "Knowledge Sources": cloudKnowledgeSources.length,
         "Intake Summaries": cloudIntakeSummaries.length,
+        "Note Generation Presets": cloudNoteGenerationPresets.length,
+        "Shorts Generation Presets": cloudShortsGenerationPresets.length,
       },
     };
   } catch (err) {
@@ -438,6 +482,8 @@ export function clearAllLocalWebCache(): void {
     localStorage.removeItem(PODCASTS_STORAGE_KEY);
     localStorage.removeItem(KNOWLEDGE_SOURCES_KEY);
     localStorage.removeItem(INTAKE_SUMMARIES_KEY);
+    localStorage.removeItem(NOTE_GENERATION_PRESETS_KEY);
+    localStorage.removeItem(SHORTS_GENERATION_PRESETS_KEY);
   } catch (e) {
     console.error("Error clearing local web cache:", e);
   }
@@ -1641,6 +1687,92 @@ export function deleteIntakeSummary(id: string): void {
   const uid = getCurrentUserId();
   if (uid) {
     deleteIntakeSummaryFromCloud(id);
+  }
+}
+
+// Reusable, topic-free generation settings a user can save from the notes intake wizard and
+// reload/tweak on a future one — kept separate from ShortsGenerationPreset since the two flows'
+// settings shapes don't overlap (learner level/complexity vs tree depth/difficulty).
+export function getNoteGenerationPresets(): NoteGenerationPreset[] {
+  try {
+    const raw = localStorage.getItem(NOTE_GENERATION_PRESETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveNoteGenerationPreset(preset: NoteGenerationPreset): NoteGenerationPreset {
+  const items = getNoteGenerationPresets();
+  const saved: NoteGenerationPreset = {
+    ...preset,
+    ownerId: preset.ownerId || getCurrentUserId() || "user_local_1",
+    updatedAt: new Date().toISOString(),
+  };
+  const idx = items.findIndex((p) => p.id === saved.id);
+  if (idx >= 0) {
+    items[idx] = saved;
+  } else {
+    items.unshift(saved);
+  }
+  localStorage.setItem(NOTE_GENERATION_PRESETS_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    saveNoteGenerationPresetToCloud(saved, uid);
+  }
+  return saved;
+}
+
+export function deleteNoteGenerationPreset(id: string): void {
+  const items = getNoteGenerationPresets().filter((p) => p.id !== id);
+  localStorage.setItem(NOTE_GENERATION_PRESETS_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    deleteNoteGenerationPresetFromCloud(id);
+  }
+}
+
+// Shorts Hub's equivalent of NoteGenerationPreset — same pattern, different field shape.
+export function getShortsGenerationPresets(): ShortsGenerationPreset[] {
+  try {
+    const raw = localStorage.getItem(SHORTS_GENERATION_PRESETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveShortsGenerationPreset(preset: ShortsGenerationPreset): ShortsGenerationPreset {
+  const items = getShortsGenerationPresets();
+  const saved: ShortsGenerationPreset = {
+    ...preset,
+    ownerId: preset.ownerId || getCurrentUserId() || "user_local_1",
+    updatedAt: new Date().toISOString(),
+  };
+  const idx = items.findIndex((p) => p.id === saved.id);
+  if (idx >= 0) {
+    items[idx] = saved;
+  } else {
+    items.unshift(saved);
+  }
+  localStorage.setItem(SHORTS_GENERATION_PRESETS_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    saveShortsGenerationPresetToCloud(saved, uid);
+  }
+  return saved;
+}
+
+export function deleteShortsGenerationPreset(id: string): void {
+  const items = getShortsGenerationPresets().filter((p) => p.id !== id);
+  localStorage.setItem(SHORTS_GENERATION_PRESETS_KEY, JSON.stringify(items));
+
+  const uid = getCurrentUserId();
+  if (uid) {
+    deleteShortsGenerationPresetFromCloud(id);
   }
 }
 
