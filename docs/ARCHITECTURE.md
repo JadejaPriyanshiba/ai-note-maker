@@ -38,8 +38,36 @@ Every domain object (`NoteDocument`, `Collection`, `FlashcardDeck`, `TestAttempt
 **2. AI calls never happen client-side.**
 All Gemini access lives in `server.ts` behind `/api/ai/*` routes. The client-side `src/lib/aiService.ts` and `src/lib/learningService.ts` are thin `fetch` wrappers — they never import `@google/genai` or hold an API key. This keeps the app's default API key server-only, while still supporting **BYOK (bring your own key)**: if a user sets a personal key in Settings, it's sent as the `x-user-api-key` header and `getGenAI()` in `server.ts` prefers it over the server's own `GEMINI_API_KEY`.
 
-**3. No routing library — a manual view-router in `App.tsx`.**
-Navigation is a single `activeView` string union (~20 view names) held in `App.tsx` state, with cross-cutting state (active note, active test, active learning session) co-located in the same component and passed down as props/callbacks. There's no React Router. This is a deliberate simplicity choice for an app of this size — see [DEVELOPMENT.md](DEVELOPMENT.md#adding-a-new-view) for how to add a view within this pattern.
+**3. No routing library — a manual view-router in `App.tsx`, backed by real URLs.**
+Navigation is a single `activeView` string union (~20 view names), with cross-cutting state (active note, active test, active learning session) co-located in `App.tsx` and passed down as props/callbacks. There's no React Router: `src/lib/router.ts` is a ~180-line History API router that maps each view (plus its entity id, where it has one) to a path and back.
+
+`activeView` is *derived* from the URL rather than held in its own state — `useRouter()` parses `window.location.pathname` into `{ view, params }`, and every navigation calls `navigate(view, params)`, which pushes a history entry and updates the route. So back/forward, refresh, and shared links all work, and every screen has its own address:
+
+| Path | View |
+|---|---|
+| `/` | home |
+| `/create/roadmap` | roadmap_editor |
+| `/collections`, `/community`, `/settings`, `/teach-back` | those views |
+| `/notes` | notes_list |
+| `/notes/:noteId` | note_studio |
+| `/notes/:noteId/audio` | audio_learning |
+| `/notes/:noteId/generating` | generation_progress |
+| `/flashcards` | flashcards |
+| `/flashcards/:deckId` | flashcard_editor |
+| `/flashcards/:deckId/study`, `/flashcards/study/due`, `/flashcards/study/collection/:collectionId` | flashcard_study |
+| `/tests` | test_generator |
+| `/tests/:testId/run` | test_runner |
+| `/tests/results/:attemptId` | test_results |
+| `/shorts` | shorts_setup |
+| `/shorts/:treeId` | shorts_map |
+| `/shorts/:treeId/feed` | shorts_feed |
+| `/shorts/:treeId/revision`, `/shorts/revision` | shorts_revision |
+
+Unrecognized paths resolve to home and the URL is rewritten to match. Because a URL can name an entity the component isn't holding (a cold load straight onto `/notes/note_123`), one effect in `App.tsx` rehydrates the matching state from `storage.ts` and redirects to the nearest list view when the id no longer resolves. The one view with nothing to rehydrate is `roadmap_editor` — its draft lives only in memory, so a reload of `/create/roadmap` sends the user home.
+
+Deep links need a server-side SPA fallback: Express serves `dist/index.html` for unmatched paths in production, Vite's `appType: "spa"` middleware does it in dev, and `vercel.json` rewrites everything except `/api` and static assets to `/index.html`.
+
+See [DEVELOPMENT.md](DEVELOPMENT.md#adding-a-new-view) for how to add a view within this pattern.
 
 **4. One domain model file.**
 `src/types.ts` is the single source of truth for every entity in the system — notes, tests, flashcards, community resources, Shorts Learning trees, everything. There are no per-feature type files. This avoids type drift between features that share concepts (e.g. a `NoteDocument` referenced from `SavedTest`, `TopicHubResource`, and `CommunityNote` all mean the same thing).

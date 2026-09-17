@@ -32,6 +32,8 @@ import {
   PodcastEpisode,
   KnowledgeSource,
   IntakeSummary,
+  NoteGenerationPreset,
+  ShortsGenerationPreset,
 } from "../types";
 
 export interface UserProfile {
@@ -893,5 +895,79 @@ export async function deleteIntakeSummaryFromCloud(id: string): Promise<void> {
     await deleteDoc(doc(db, "intake_summaries", id));
   } catch (err) {
     console.error("Error deleting intake summary from cloud:", err);
+  }
+}
+
+// ==================== NOTE GENERATION PRESETS ==================== //
+
+export async function fetchUserNoteGenerationPresetsFromCloud(userId: string): Promise<NoteGenerationPreset[]> {
+  try {
+    const q = query(collection(db, "note_generation_presets"), where("ownerId", "==", userId));
+    const snap = await getDocs(q);
+    const list: NoteGenerationPreset[] = [];
+    snap.forEach((docSnap) => {
+      list.push(deserializeFromFirestore(docSnap.data()) as NoteGenerationPreset);
+    });
+    return list.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  } catch (err) {
+    console.error("Error fetching note generation presets from cloud:", err);
+    return [];
+  }
+}
+
+export async function saveNoteGenerationPresetToCloud(preset: NoteGenerationPreset, userId: string): Promise<boolean> {
+  try {
+    const ref = doc(db, "note_generation_presets", preset.id);
+    const payload = sanitizeForFirestore({ ...preset, ownerId: userId });
+    await setDoc(ref, payload);
+    return true;
+  } catch (err) {
+    console.error("Error saving note generation preset to cloud:", err);
+    return false;
+  }
+}
+
+export async function deleteNoteGenerationPresetFromCloud(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "note_generation_presets", id));
+  } catch (err) {
+    console.error("Error deleting note generation preset from cloud:", err);
+  }
+}
+
+// ==================== SHORTS GENERATION PRESETS ==================== //
+
+export async function fetchUserShortsGenerationPresetsFromCloud(userId: string): Promise<ShortsGenerationPreset[]> {
+  try {
+    const q = query(collection(db, "shorts_generation_presets"), where("ownerId", "==", userId));
+    const snap = await getDocs(q);
+    const list: ShortsGenerationPreset[] = [];
+    snap.forEach((docSnap) => {
+      list.push(deserializeFromFirestore(docSnap.data()) as ShortsGenerationPreset);
+    });
+    return list.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  } catch (err) {
+    console.error("Error fetching shorts generation presets from cloud:", err);
+    return [];
+  }
+}
+
+export async function saveShortsGenerationPresetToCloud(preset: ShortsGenerationPreset, userId: string): Promise<boolean> {
+  try {
+    const ref = doc(db, "shorts_generation_presets", preset.id);
+    const payload = sanitizeForFirestore({ ...preset, ownerId: userId });
+    await setDoc(ref, payload);
+    return true;
+  } catch (err) {
+    console.error("Error saving shorts generation preset to cloud:", err);
+    return false;
+  }
+}
+
+export async function deleteShortsGenerationPresetFromCloud(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "shorts_generation_presets", id));
+  } catch (err) {
+    console.error("Error deleting shorts generation preset from cloud:", err);
   }
 }

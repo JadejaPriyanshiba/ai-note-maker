@@ -1,12 +1,31 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { Film, Sparkles, Loader2, FolderTree, CloudUpload, CheckCircle2, Trash2, AlertTriangle } from "lucide-react";
-import { LearningTree } from "../../types";
+import { Film, Sparkles, Loader2, FolderTree, CloudUpload, CheckCircle2, Trash2, AlertTriangle, FileUp, Link2 } from "lucide-react";
+import { LearningTree, NoteDocument, ShortsGenerationPreset } from "../../types";
 import { generateLearningTree, getOrderedLeafNodes } from "../../lib/learningService";
-import { getLearningTrees, saveLearningTree, deleteLearningTree, migrateLocalDataToCloud } from "../../lib/storage";
+import {
+  getLearningTrees,
+  saveLearningTree,
+  deleteLearningTree,
+  migrateLocalDataToCloud,
+  getShortsGenerationPresets,
+  saveShortsGenerationPreset,
+  deleteShortsGenerationPreset,
+} from "../../lib/storage";
 import { useAuth } from "../../lib/AuthContext";
 import { fadeInUp, staggerContainer } from "../../lib/motion";
 import { ConfirmModal } from "../ConfirmModal";
+import { ShortsIntakeWizard } from "./ShortsIntakeWizard";
+import { NoteLinkPicker } from "./NoteLinkPicker";
+import { ShortsSettings } from "../../lib/intake/mapToShortsSettings";
+import { mapNoteToShortsSettings } from "../../lib/intake/mapNoteToShortsSettings";
+import { PresetPicker } from "../PresetPicker";
+
+let shortsPresetIdCounter = 0;
+function nextShortsPresetId(): string {
+  shortsPresetIdCounter += 1;
+  return `spreset_${Date.now()}_${shortsPresetIdCounter}`;
+}
 
 interface ShortsSetupViewProps {
   onGenerated: (tree: LearningTree) => void;
@@ -24,6 +43,41 @@ export const ShortsSetupView: React.FC<ShortsSetupViewProps> = ({ onGenerated })
   const [error, setError] = useState<string | null>(null);
   const [justSynced, setJustSynced] = useState(false);
   const [treeToDelete, setTreeToDelete] = useState<LearningTree | null>(null);
+  const [showIntakeWizard, setShowIntakeWizard] = useState(false);
+  const [showNoteLinkPicker, setShowNoteLinkPicker] = useState(false);
+  const [presets, setPresets] = useState<ShortsGenerationPreset[]>(() => getShortsGenerationPresets());
+
+  function applySettings(settings: ShortsSettings) {
+    setMainTopic(settings.mainTopic);
+    setTopicDescription(settings.topicDescription);
+    setDepth(settings.depth);
+    setLanguage(settings.language);
+    setDifficulty(settings.difficulty);
+  }
+
+  function loadPreset(preset: ShortsGenerationPreset) {
+    setDepth(preset.depth);
+    setLanguage(preset.language);
+    setDifficulty(preset.difficulty);
+  }
+
+  function savePreset(name: string) {
+    const saved = saveShortsGenerationPreset({
+      id: nextShortsPresetId(),
+      name,
+      depth,
+      language,
+      difficulty,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setPresets((prev) => [saved, ...prev]);
+  }
+
+  function deletePreset(id: string) {
+    deleteShortsGenerationPreset(id);
+    setPresets((prev) => prev.filter((p) => p.id !== id));
+  }
 
   const handleSyncTrees = async () => {
     if (!user) return;
@@ -169,6 +223,23 @@ export const ShortsSetupView: React.FC<ShortsSetupViewProps> = ({ onGenerated })
           </p>
         </div>
 
+        <div className="relative z-10 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setShowIntakeWizard(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <FileUp className="w-3.5 h-3.5" /> Import from materials
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNoteLinkPicker(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <Link2 className="w-3.5 h-3.5" /> Link an existing note
+          </button>
+        </div>
+
         <form onSubmit={handleGenerate} className="relative z-10 space-y-4">
           <div>
             <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Topic *</label>
@@ -238,6 +309,14 @@ export const ShortsSetupView: React.FC<ShortsSetupViewProps> = ({ onGenerated })
             </div>
           </div>
 
+          <PresetPicker
+            label="Shorts"
+            presets={presets}
+            onLoad={loadPreset}
+            onSaveNew={savePreset}
+            onDelete={deletePreset}
+          />
+
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -269,6 +348,18 @@ export const ShortsSetupView: React.FC<ShortsSetupViewProps> = ({ onGenerated })
         confirmText="Delete Tree"
         onConfirm={confirmDeleteTree}
         onClose={() => setTreeToDelete(null)}
+      />
+
+      <ShortsIntakeWizard
+        isOpen={showIntakeWizard}
+        onClose={() => setShowIntakeWizard(false)}
+        onApply={applySettings}
+      />
+
+      <NoteLinkPicker
+        isOpen={showNoteLinkPicker}
+        onClose={() => setShowNoteLinkPicker(false)}
+        onSelect={(note: NoteDocument) => applySettings(mapNoteToShortsSettings(note))}
       />
     </div>
   );

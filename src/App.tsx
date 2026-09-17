@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, MotionConfig } from "motion/react";
 import { viewTransition } from "./lib/motion";
 import { Header } from "./components/Header";
@@ -41,7 +41,6 @@ import {
   TestAttempt,
   SavedTest,
   FlashcardDeck,
-  Flashcard,
   LearningTree,
   LearningSession,
   LearningSessionFilter,
@@ -60,39 +59,31 @@ import {
   fetchPublicCommunityCloudData,
   getActiveLearningSession,
   saveLearningSession,
+  getFlashcardDecks,
+  getTestAttempts,
+  getLearningTree,
+  getCommunityNotes,
+  getSavedLearningResources,
 } from "./lib/storage";
 import { generateBatchedTestQuestions } from "./lib/aiService";
+import { AppView, RouteParams, buildPath, useRouter } from "./lib/router";
 
 export default function App() {
-  const { user, setSyncing } = useAuth();
+  const { user, loading: authLoading, syncing, setSyncing } = useAuth();
   const { activeGeneration } = useGeneration();
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("app_theme");
     if (saved === "dark" || saved === "light") return saved;
     return "light";
   });
-  const [activeView, setActiveView] = useState<
-    | "home"
-    | "collections"
-    | "notes_list"
-    | "roadmap_editor"
-    | "generation_progress"
-    | "note_studio"
-    | "audio_learning"
-    | "flashcards"
-    | "flashcard_editor"
-    | "flashcard_study"
-    | "test_generator"
-    | "test_runner"
-    | "test_results"
-    | "teach_back"
-    | "community"
-    | "settings"
-    | "shorts_setup"
-    | "shorts_map"
-    | "shorts_feed"
-    | "shorts_revision"
-  >("home");
+  // The URL is the source of truth for which view is mounted — `activeView` is derived
+  // from it rather than held in its own state, so back/forward and deep links work.
+  const { route, navigate } = useRouter();
+  const activeView = route.view;
+  const go = navigate;
+  // Full path, so moving between two notes re-runs the entrance transition and scroll reset
+  // the same way moving between two different views does.
+  const routeKey = buildPath(route.view, route.params);
 
   const [activeNote, setActiveNote] = useState<NoteDocument | null>(null);
   const [isNoteReadOnly, setIsNoteReadOnly] = useState<boolean>(false);
@@ -114,8 +105,6 @@ export default function App() {
 
   // Flashcards active state
   const [activeDeck, setActiveDeck] = useState<FlashcardDeck | null>(null);
-  const [studyCards, setStudyCards] = useState<Flashcard[]>([]);
-  const [studyDeckTitle, setStudyDeckTitle] = useState<string>("");
   const [isAIFlashcardModalOpen, setIsAIFlashcardModalOpen] = useState(false);
   const [aiGenPreselectedNote, setAiGenPreselectedNote] = useState<NoteDocument | null>(null);
   const [aiGenPreselectedColId, setAiGenPreselectedColId] = useState<string | null>(null);
@@ -150,10 +139,123 @@ export default function App() {
   const isFirstRender = useRef(true);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
-  }, [activeView]);
+  }, [routeKey]);
   useEffect(() => {
     isFirstRender.current = false;
   }, []);
+
+  // Cards under study come from the URL rather than from state handed over at navigation
+  // time, so /flashcards/<id>/study, /flashcards/study/collection/<id> and
+  // /flashcards/study/due all survive a reload or a shared link.
+  const studySelection = useMemo(() => {
+    if (activeView !== "flashcard_study") return null;
+    if (route.params.deckId) {
+      const deck = getFlashcardDecks().find((d) => d.id === route.params.deckId);
+      return { cards: getFlashcards(route.params.deckId), title: deck?.title || "Study Deck" };
+    }
+    if (route.params.collectionId) {
+      return { cards: getDueFlashcards(route.params.collectionId, true), title: "Collection Study Deck" };
+    }
+    return { cards: getDueFlashcards(), title: "Due Spaced Repetition Cards" };
+  }, [activeView, route.params.deckId, route.params.collectionId]);
+
+  // Deep links, reloads and back/forward can land on a URL naming an entity this component
+  // isn't holding yet (e.g. straight onto /notes/note_123). Rehydrate it from storage, and
+  // fall back to the closest list view when the id no longer resolves.
+  useEffect(() => {
+    const { view, params } = route;
+
+    // Cloud data lands asynchronously after sign-in, so an id that looks missing right now
+    // may simply not have synced yet — hold the view blank rather than bouncing the user
+    // off a deep link to a note that is about to exist.
+    const dataSettled = !authLoading && !syncing;
+    const missing = (fallbackView: AppView, fallbackParams: RouteParams = {}) => {
+      if (dataSettled) go(fallbackView, fallbackParams, { replace: true });
+    };
+
+    if (view === "note_studio" || view === "audio_learning" || view === "generation_progress") {
+      if (!params.noteId) return void missing("notes_list");
+      if (activeNote?.id === params.noteId) return;
+      const local = getSavedNotes().find((n) => n.id === params.noteId);
+      // Community notes are read-only copies that never enter the local notes list.
+      const shared = getCommunityNotes().find(
+        (c) => c.content?.id === params.noteId || c.noteId === params.noteId
+      )?.content;
+      const note = local || shared || null;
+      if (!note) return void missing("notes_list");
+      setActiveNote(note);
+      setIsNoteReadOnly(!local);
+      return;
+    }
+
+    if (view === "flashcard_editor") {
+      if (activeDeck?.id === params.deckId) return;
+      const deck = getFlashcardDecks().find((d) => d.id === params.deckId);
+      if (!deck) return void missing("flashcards");
+      setActiveDeck(deck);
+      return;
+    }
+
+    if (view === "flashcard_study") {
+      // An empty deck is a valid state (the study view has its own empty message); only a
+      // deckId that no longer exists is a dead link.
+      if (params.deckId && !getFlashcardDecks().some((d) => d.id === params.deckId)) {
+        missing("flashcards");
+      }
+      return;
+    }
+
+    if (view === "test_runner") {
+      if (testConfig?.id === params.testId) return;
+      const saved = getSavedTestsList().find((t) => t.id === params.testId);
+      if (!saved) return void missing("test_generator");
+      setTestConfig(saved.config);
+      setTestQuestions(saved.questions);
+      return;
+    }
+
+    if (view === "test_results") {
+      if (activeAttempt?.id === params.attemptId) return;
+      const attempt = getTestAttempts().find((a) => a.id === params.attemptId);
+      if (!attempt) return void missing("test_generator");
+      setActiveAttempt(attempt);
+      return;
+    }
+
+    if (view === "shorts_map" || view === "shorts_feed" || view === "shorts_revision") {
+      if (!params.treeId) {
+        // /shorts/revision without a tree is only reachable by hand — nothing to review.
+        if (view !== "shorts_revision" || revisionResources.length === 0) {
+          missing("shorts_setup");
+        }
+        return;
+      }
+      const tree = activeLearningTree?.id === params.treeId ? activeLearningTree : getLearningTree(params.treeId);
+      if (!tree) return void missing("shorts_setup");
+      if (activeLearningTree?.id !== tree.id) setActiveLearningTree(tree);
+
+      if (view === "shorts_feed" && activeLearningSession?.treeId !== tree.id) {
+        // Only an unfinished session can be resumed from a bare URL; otherwise send the
+        // user back to the map to pick filters and a time limit for a new one.
+        const session = getActiveLearningSession(tree.id);
+        if (!session) return void missing("shorts_map", { treeId: tree.id });
+        setActiveLearningSession(session);
+      }
+
+      if (view === "shorts_revision" && revisionResources.length === 0) {
+        const treeNodeIds = new Set(tree.nodes.map((n) => n.id));
+        const saved = getSavedLearningResources()
+          .filter((r) => treeNodeIds.has(r.learningNodeId))
+          .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+        if (saved.length === 0) return void missing("shorts_map", { treeId: tree.id });
+        setRevisionResources(saved);
+      }
+      return;
+    }
+
+    // The roadmap draft only lives in memory — a reload of /create/roadmap has nothing to show.
+    if (view === "roadmap_editor" && !roadmapDraft) go("home", {}, { replace: true });
+  }, [route, activeNote, activeDeck, testConfig, activeAttempt, activeLearningTree, activeLearningSession, roadmapDraft, revisionResources.length, authLoading, syncing]);
 
   // Sync Cloud Data on User Auth change
   useEffect(() => {
@@ -195,7 +297,7 @@ export default function App() {
       instructions,
       topics: initialTopics,
     });
-    setActiveView("roadmap_editor");
+    go("roadmap_editor");
   };
 
   // Only one background generation job runs at a time — starting a second would silently stall
@@ -218,7 +320,7 @@ export default function App() {
     if (!guardCanStartGeneration()) return;
     setActiveNote(note);
     setBatchSize(1);
-    setActiveView("generation_progress");
+    go("generation_progress", { noteId: note.id });
   };
 
   // Step 2: Approve Roadmap -> Create NoteDocument -> Move to GenerationProgress
@@ -257,14 +359,14 @@ export default function App() {
     saveNote(newNote);
     setActiveNote(newNote);
     setBatchSize(selectedBatchSize);
-    setActiveView("generation_progress");
+    go("generation_progress", { noteId: newNote.id });
   };
 
   // Step 3: Complete or Pause Generation -> Open NoteStudio
   const handleCompleteGeneration = (updatedNote: NoteDocument) => {
     setActiveNote(updatedNote);
     setIsNoteReadOnly(false);
-    setActiveView("note_studio");
+    go("note_studio", { noteId: updatedNote.id });
   };
 
   // Start Assessment Flow
@@ -283,7 +385,7 @@ export default function App() {
 
     setTestConfig(config);
     setTestQuestions(questions);
-    setActiveView("test_runner");
+    go("test_runner", { testId: config.id });
   };
 
   const handleCompleteTest = (attempt: TestAttempt) => {
@@ -299,23 +401,18 @@ export default function App() {
     }
 
     setActiveAttempt(attempt);
-    setActiveView("test_results");
+    go("test_results", { attemptId: attempt.id });
   };
 
-  // Flashcard Helpers
+  // Flashcard Helpers — the cards under study are derived from the URL (see `studySelection`),
+  // so these only set the surrounding deck context and navigate.
   const handleStudyDeck = (deck: FlashcardDeck) => {
-    const cards = getFlashcards(deck.id);
     setActiveDeck(deck);
-    setStudyCards(cards);
-    setStudyDeckTitle(deck.title);
-    setActiveView("flashcard_study");
+    go("flashcard_study", { deckId: deck.id });
   };
 
   const handleStudyCollectionFlashcards = (collectionId: string) => {
-    const dueOrAll = getDueFlashcards(collectionId, true);
-    setStudyCards(dueOrAll);
-    setStudyDeckTitle(`Collection Study Deck`);
-    setActiveView("flashcard_study");
+    go("flashcard_study", { collectionId });
   };
 
   const handleCreateNewDeckInCollection = (collectionId: string | null) => {
@@ -332,13 +429,13 @@ export default function App() {
     };
     saveFlashcardDeck(newDeck);
     setActiveDeck(newDeck);
-    setActiveView("flashcard_editor");
+    go("flashcard_editor", { deckId: newDeck.id });
   };
 
   // Shorts Learning Handlers
   const handleLearningTreeGenerated = (tree: LearningTree) => {
     setActiveLearningTree(tree);
-    setActiveView("shorts_map");
+    go("shorts_map", { treeId: tree.id });
   };
 
   const handleStartLearningSession = (
@@ -368,18 +465,18 @@ export default function App() {
     saveLearningSession(session);
     setActiveLearningTree(tree);
     setActiveLearningSession(session);
-    setActiveView("shorts_feed");
+    go("shorts_feed", { treeId: tree.id });
   };
 
   const handleResumeLearningSession = (tree: LearningTree, session: LearningSession) => {
     setActiveLearningTree(tree);
     setActiveLearningSession(session);
-    setActiveView("shorts_feed");
+    go("shorts_feed", { treeId: tree.id });
   };
 
   const handleStartRevision = (resources: SavedLearningResource[]) => {
     setRevisionResources(resources);
-    setActiveView("shorts_revision");
+    go("shorts_revision", activeLearningTree ? { treeId: activeLearningTree.id } : {});
   };
 
   const handleTestMeFromShorts = async (topics: { id: string; title: string }[]) => {
@@ -415,14 +512,15 @@ export default function App() {
       <Header
         activeTab={activeView}
         onSelectTab={(tab) => {
-          if (tab === "home") setActiveView("home");
-          else if (tab === "collections") setActiveView("collections");
-          else if (tab === "my_notes") setActiveView("notes_list");
-          else if (tab === "flashcards") setActiveView("flashcards");
-          else if (tab === "community") setActiveView("community");
-          else if (tab === "teach_back") setActiveView("teach_back");
-          else if (tab === "settings") setActiveView("settings");
-          else if (tab === "shorts_learning") setActiveView(activeLearningTree ? "shorts_map" : "shorts_setup");
+          if (tab === "home") go("home");
+          else if (tab === "collections") go("collections");
+          else if (tab === "my_notes") go("notes_list");
+          else if (tab === "flashcards") go("flashcards");
+          else if (tab === "community") go("community");
+          else if (tab === "teach_back") go("teach_back");
+          else if (tab === "settings") go("settings");
+          else if (tab === "shorts_learning")
+            activeLearningTree ? go("shorts_map", { treeId: activeLearningTree.id }) : go("shorts_setup");
         }}
         theme={theme}
         onToggleTheme={toggleTheme}
@@ -432,7 +530,7 @@ export default function App() {
       {/* Main View Router */}
       <main className="flex-1 pb-16">
       <motion.div
-        key={activeView}
+        key={routeKey}
         initial={isFirstRender.current ? false : "initial"}
         animate="animate"
         variants={viewTransition}
@@ -442,10 +540,10 @@ export default function App() {
             onStartRoadmap={handleStartRoadmap}
             onOpenNoteStudio={(note) => {
               setActiveNote(note);
-              setActiveView("note_studio");
+              go("note_studio", { noteId: note.id });
             }}
-            onOpenCommunity={() => setActiveView("community")}
-            onOpenTests={() => setActiveView("test_generator")}
+            onOpenCommunity={() => go("community")}
+            onOpenTests={() => go("test_generator")}
             onContinueGeneration={handleContinueGeneration}
           />
         )}
@@ -455,26 +553,26 @@ export default function App() {
             onOpenNoteStudio={(note) => {
               setActiveNote(note);
               setIsNoteReadOnly(false);
-              setActiveView("note_studio");
+              go("note_studio", { noteId: note.id });
             }}
             onOpenFlashcardDeck={(deck) => {
               setActiveDeck(deck);
-              setActiveView("flashcard_editor");
+              go("flashcard_editor", { deckId: deck.id });
             }}
             onStudyFlashcardDeck={handleStudyDeck}
             onStudyCollectionFlashcards={handleStudyCollectionFlashcards}
             onOpenTest={(test) => {
               setTestConfig(test.config);
               setTestQuestions(test.questions);
-              setActiveView("test_runner");
+              go("test_runner", { testId: test.id });
             }}
             onCreateNewNoteInCollection={(colId) => {
               setAiGenPreselectedColId(colId);
-              setActiveView("home");
+              go("home");
             }}
             onCreateNewDeckInCollection={handleCreateNewDeckInCollection}
             onCreateNewTestInCollection={() => {
-              setActiveView("test_generator");
+              go("test_generator");
             }}
           />
         )}
@@ -484,17 +582,17 @@ export default function App() {
             onOpenNoteStudio={(note) => {
               setActiveNote(note);
               setIsNoteReadOnly(false);
-              setActiveView("note_studio");
+              go("note_studio", { noteId: note.id });
             }}
             onOpenTest={(note) => {
               setActiveNote(note);
-              setActiveView("test_generator");
+              go("test_generator");
             }}
             onOpenAudio={(note) => {
               setActiveNote(note);
-              setActiveView("audio_learning");
+              go("audio_learning", { noteId: note.id });
             }}
-            onCreateNew={() => setActiveView("home")}
+            onCreateNew={() => go("home")}
             onContinueGeneration={handleContinueGeneration}
           />
         )}
@@ -503,7 +601,7 @@ export default function App() {
           <FlashcardHubView
             onOpenDeckEditor={(deck) => {
               setActiveDeck(deck);
-              setActiveView("flashcard_editor");
+              go("flashcard_editor", { deckId: deck.id });
             }}
             onStudyDeck={handleStudyDeck}
             onOpenAIGenerator={() => {
@@ -511,18 +609,14 @@ export default function App() {
               setIsAIFlashcardModalOpen(true);
             }}
             onCreateNewDeck={() => handleCreateNewDeckInCollection(null)}
-            onStudyDueCards={(cards) => {
-              setStudyCards(cards);
-              setStudyDeckTitle("Due Spaced Repetition Cards");
-              setActiveView("flashcard_study");
-            }}
+            onStudyDueCards={() => go("flashcard_study")}
           />
         )}
 
         {activeView === "flashcard_editor" && activeDeck && (
           <FlashcardEditorView
             deck={activeDeck}
-            onBack={() => setActiveView("flashcards")}
+            onBack={() => go("flashcards")}
             onStudyDeck={handleStudyDeck}
             onOpenAIGenerator={() => {
               setAiGenPreselectedNote(null);
@@ -533,9 +627,9 @@ export default function App() {
 
         {activeView === "flashcard_study" && (
           <FlashcardStudyView
-            deckTitle={studyDeckTitle}
-            cards={studyCards}
-            onBack={() => setActiveView("flashcards")}
+            deckTitle={studySelection?.title || "Study Deck"}
+            cards={studySelection?.cards || []}
+            onBack={() => go("flashcards")}
           />
         )}
 
@@ -550,7 +644,7 @@ export default function App() {
               instructions={roadmapDraft.instructions}
               initialTopics={roadmapDraft.topics}
               onStartGeneration={handleApproveRoadmap}
-              onCancel={() => setActiveView("home")}
+              onCancel={() => go("home")}
             />
           </div>
         )}
@@ -561,7 +655,7 @@ export default function App() {
               note={activeNote}
               batchSize={batchSize}
               onComplete={handleCompleteGeneration}
-              onCancel={() => setActiveView("note_studio")}
+              onCancel={() => go("note_studio", { noteId: activeNote.id })}
             />
           </div>
         )}
@@ -570,12 +664,13 @@ export default function App() {
           <NoteStudio
             note={activeNote}
             readOnly={isNoteReadOnly}
-            onBack={() => setActiveView("notes_list")}
-            onOpenAudio={() => setActiveView("audio_learning")}
-            onOpenTest={() => setActiveView("test_generator")}
+            onBack={() => go("notes_list")}
+            onOpenAudio={() => go("audio_learning", { noteId: activeNote.id })}
+            onOpenTest={() => go("test_generator")}
             onNoteRemixed={(remixed) => {
               setActiveNote(remixed);
               setIsNoteReadOnly(false);
+              go("note_studio", { noteId: remixed.id }, { replace: true });
             }}
           />
         )}
@@ -583,7 +678,7 @@ export default function App() {
         {activeView === "audio_learning" && activeNote && (
           <AudioLearningView
             note={activeNote}
-            onBack={() => setActiveView("note_studio")}
+            onBack={() => go("note_studio", { noteId: activeNote.id })}
           />
         )}
 
@@ -595,7 +690,7 @@ export default function App() {
               onStartTest={handleStartTest}
               onViewAttemptResults={(attempt) => {
                 setActiveAttempt(attempt);
-                setActiveView("test_results");
+                go("test_results", { attemptId: attempt.id });
               }}
             />
           </div>
@@ -607,7 +702,7 @@ export default function App() {
               config={testConfig}
               questions={testQuestions}
               onCompleteTest={handleCompleteTest}
-              onCancel={() => setActiveView("test_generator")}
+              onCancel={() => go("test_generator")}
             />
           </div>
         )}
@@ -616,8 +711,8 @@ export default function App() {
           <div className="py-8">
             <TestResultsView
               attempt={activeAttempt}
-              onRetake={() => setActiveView("test_generator")}
-              onClose={() => setActiveView("home")}
+              onRetake={() => go("test_generator")}
+              onClose={() => go("home")}
             />
           </div>
         )}
@@ -631,19 +726,19 @@ export default function App() {
             onOpenNoteStudio={(note, readOnly = false) => {
               setActiveNote(note);
               setIsNoteReadOnly(!!readOnly);
-              setActiveView("note_studio");
+              go("note_studio", { noteId: note.id });
             }}
             onOpenFlashcardDeck={(deck) => {
               setActiveDeck(deck);
-              setActiveView("flashcard_editor");
+              go("flashcard_editor", { deckId: deck.id });
             }}
             onOpenCollection={() => {
-              setActiveView("collections");
+              go("collections");
             }}
             onTakeTest={(test) => {
               setTestConfig(test.config);
               setTestQuestions(test.questions);
-              setActiveView("test_runner");
+              go("test_runner", { testId: test.id });
             }}
           />
         )}
@@ -660,11 +755,11 @@ export default function App() {
             onTreeChange={setActiveLearningTree}
             onStartSession={handleStartLearningSession}
             onResumeSession={handleResumeLearningSession}
-            onBack={() => setActiveView("shorts_setup")}
+            onBack={() => go("shorts_setup")}
             onTreeDeleted={() => {
               setActiveLearningTree(null);
               setActiveLearningSession(null);
-              setActiveView("shorts_setup");
+              go("shorts_setup");
             }}
             onStartRevision={handleStartRevision}
           />
@@ -675,7 +770,7 @@ export default function App() {
             tree={activeLearningTree}
             session={activeLearningSession}
             onSessionChange={setActiveLearningSession}
-            onExit={() => setActiveView("shorts_map")}
+            onExit={() => go("shorts_map", { treeId: activeLearningTree.id })}
             onTestMe={handleTestMeFromShorts}
           />
         )}
@@ -684,7 +779,9 @@ export default function App() {
           <RevisionFeedView
             resources={revisionResources}
             title={activeLearningTree?.title || "Saved Videos"}
-            onExit={() => setActiveView(activeLearningTree ? "shorts_map" : "shorts_setup")}
+            onExit={() =>
+              activeLearningTree ? go("shorts_map", { treeId: activeLearningTree.id }) : go("shorts_setup")
+            }
             onTestMe={handleTestMeFromShorts}
           />
         )}
@@ -714,7 +811,7 @@ export default function App() {
         preselectedCollectionId={aiGenPreselectedColId}
         onDeckCreated={(newDeck) => {
           setActiveDeck(newDeck);
-          setActiveView("flashcard_editor");
+          go("flashcard_editor", { deckId: newDeck.id });
         }}
       />
 
@@ -724,7 +821,7 @@ export default function App() {
           const allDone = (note.roadmap || []).every((t) => t.status === "completed" || t.status === "skipped");
           setActiveNote(note);
           setIsNoteReadOnly(false);
-          setActiveView(allDone ? "note_studio" : "generation_progress");
+          go(allDone ? "note_studio" : "generation_progress", { noteId: note.id });
         }}
       />
     </div>

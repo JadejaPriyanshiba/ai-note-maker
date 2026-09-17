@@ -541,6 +541,36 @@ export interface KnowledgeSource {
 // brief, and the topic list it implies — saved on its own so a user who doesn't want to proceed
 // to a full roadmap/note yet still keeps what they already paid tokens to generate. Resuming one
 // re-enters the wizard's result step directly, with no new AI call.
+// A user-named, reusable set of generation settings (not tied to any topic) — saved once, reused
+// and tweaked across future notes instead of re-entering the same learner level/complexity/depth/
+// language/instructions every time. Deliberately excludes subject/topic so one preset applies to
+// many different notes.
+export interface NoteGenerationPreset {
+  id: string;
+  ownerId?: string;
+  name: string;
+  learnerLevel: LearnerLevel;
+  complexity: Complexity;
+  depth: Depth;
+  language: NoteLanguage;
+  instructions?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Shorts Hub's equivalent of NoteGenerationPreset — reusable tree depth/language/difficulty
+// settings, excluding the topic itself.
+export interface ShortsGenerationPreset {
+  id: string;
+  ownerId?: string;
+  name: string;
+  depth: number; // 2-4, tree depth
+  language: string; // English | Hindi | Gujarati | Hinglish
+  difficulty: string; // Beginner | Intermediate | Advanced | Mixed
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IntakeSummary {
   id: string;
   ownerId?: string;

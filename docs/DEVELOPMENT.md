@@ -108,12 +108,17 @@ src/
 
 ### Adding a new view
 
-Views are entries in the `activeView` string union in `src/App.tsx`, not routes:
+Views are entries in the `AppView` string union in `src/lib/router.ts`, each mapped to a URL by the `ROUTES` table in the same file. `App.tsx` derives `activeView` from the URL — don't reintroduce `useState` for it, and don't add React Router.
 
-1. Add the view name to the `activeView` union type.
-2. Create the component under `src/components/`.
-3. Add a render branch in `App.tsx`'s `<main>` (`{activeView === "your_view" && <YourComponent ... />}`).
-4. Add a nav entry in `src/components/Header.tsx` if it should be directly reachable from navigation.
+1. Add the view name to the `AppView` union in `src/lib/router.ts`.
+2. Add one entry to `ROUTES` with its path. Use `:name` segments for entity ids (they're captured into `RouteParams`, so a new id kind also needs a field there). Ordering matters: a pattern with a literal segment that could also be read as an id — `/shorts/revision` vs `/shorts/:treeId` — must come first.
+3. Create the component under `src/components/`.
+4. Add a render branch in `App.tsx`'s `<main>` (`{activeView === "your_view" && <YourComponent ... />}`).
+5. Navigate to it with `go("your_view", { someId })` — never `setActiveView`. Pass `{ replace: true }` as a third argument for redirects that shouldn't add a history entry.
+6. If the path carries an id, add a branch to the deep-link hydration effect in `App.tsx` that loads the entity from `storage.ts` and redirects to the nearest list view when it's missing — otherwise the URL will render a blank screen on reload.
+7. Add a nav entry in `src/components/Header.tsx` if it should be directly reachable from navigation.
+
+Anything derived purely from the URL (e.g. the cards behind `/flashcards/:deckId/study`) is better computed in a `useMemo` keyed on the route params than handed over as state at navigation time — that's what makes the link survive a reload.
 
 ### Adding a new AI endpoint
 
