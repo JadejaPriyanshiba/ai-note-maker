@@ -13,6 +13,40 @@ function getHeaders(): Record<string, string> {
   return headers;
 }
 
+// The host can fail a request before (or instead of) our Express handler ever running — a
+// serverless timeout, a crashed function, a proxy error — and those responses are HTML, not JSON.
+// Calling res.json() on them throws "Unexpected token 'A'", which reached users as a meaningless
+// error message. Read the body once as text, translate platform failures into something
+// actionable, and otherwise apply the usual { success, error } contract.
+export async function readAIResponse<T = any>(res: Response, fallbackError: string): Promise<T> {
+  const raw = await res.text();
+
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    if (res.status === 504 || /FUNCTION_INVOCATION_TIMEOUT/i.test(raw)) {
+      throw new Error(
+        `${fallbackError}: the server took too long and cut the request off. Try again, or reduce how much source material you attached.`
+      );
+    }
+    if (/FUNCTION_INVOCATION_FAILED/i.test(raw)) {
+      throw new Error(
+        `${fallbackError}: the server function crashed before it could respond. Try again — if it keeps happening, check the server logs.`
+      );
+    }
+    if (res.status === 413) {
+      throw new Error(`${fallbackError}: the request was too large. Try attaching fewer or smaller sources.`);
+    }
+    throw new Error(`${fallbackError}: the server returned an unexpected response (HTTP ${res.status}).`);
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || fallbackError);
+  }
+  return data as T;
+}
+
 export async function testApiKey(userApiKey?: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const res = await fetch("/api/ai/test-key", {
@@ -41,10 +75,7 @@ export async function generateRoadmap(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to generate study roadmap");
-  }
+  const data = await readAIResponse(res, "Failed to generate study roadmap");
   return data.roadmap as { title: string; description: string; estimatedMinutes?: number }[];
 }
 
@@ -81,10 +112,7 @@ export async function generateIntakeBrief(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to analyze your request and sources");
-  }
+  const data = await readAIResponse(res, "Failed to analyze your request and sources");
   return data.brief as IntakeBrief;
 }
 
@@ -102,10 +130,7 @@ export async function summarizeSource(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to summarize source");
-  }
+  const data = await readAIResponse(res, "Failed to summarize source");
   return { summary: data.summary as string, keyPoints: (data.keyPoints as string[]) || [] };
 }
 
@@ -116,10 +141,7 @@ export async function suggestTopics(subject: string, existingTopics: string[]) {
     headers: getHeaders(),
     body: JSON.stringify({ subject, existingTopics }),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to suggest topics");
-  }
+  const data = await readAIResponse(res, "Failed to suggest topics");
   return data.suggestedTopics as { title: string; description: string; estimatedMinutes?: number }[];
 }
 
@@ -139,10 +161,7 @@ export async function generateTopicNotes(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || `Failed to generate notes for "${params.topicTitle}"`);
-  }
+  const data = await readAIResponse(res, `Failed to generate notes for "${params.topicTitle}"`);
   if (!data.notes || !Array.isArray(data.notes.blocks) || data.notes.blocks.length === 0) {
     throw new Error(`AI generated empty content for "${params.topicTitle}". You can retry or skip this topic.`);
   }
@@ -162,10 +181,7 @@ export async function selectionAction(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "AI action failed");
-  }
+  const data = await readAIResponse(res, "AI action failed");
   return data.result as string;
 }
 
@@ -183,10 +199,7 @@ export async function generateTestQuestions(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to generate test questions");
-  }
+  const data = await readAIResponse(res, "Failed to generate test questions");
   return data.questions as Question[];
 }
 
@@ -241,10 +254,7 @@ export async function generateRevisionPlan(subject: string, weakTopics: string[]
     headers: getHeaders(),
     body: JSON.stringify({ subject, weakTopics }),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to generate revision plan");
-  }
+  const data = await readAIResponse(res, "Failed to generate revision plan");
   return data.revisionPlan;
 }
 
@@ -255,10 +265,7 @@ export async function evaluateTeachBack(topicTitle: string, userExplanation: str
     headers: getHeaders(),
     body: JSON.stringify({ topicTitle, userExplanation }),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Teach-back evaluation failed");
-  }
+  const data = await readAIResponse(res, "Teach-back evaluation failed");
   return data.evaluation;
 }
 
@@ -269,10 +276,7 @@ export async function generatePodcastScript(noteTitle: string, topicTitle: strin
     headers: getHeaders(),
     body: JSON.stringify({ noteTitle, topicTitle, textContent }),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Podcast script generation failed");
-  }
+  const data = await readAIResponse(res, "Podcast script generation failed");
   return data.dialogue as PodcastTurn[];
 }
 
@@ -290,10 +294,7 @@ export async function generateFlashcards(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Flashcard generation failed");
-  }
+  const data = await readAIResponse(res, "Flashcard generation failed");
   return data.cards as {
     front: string;
     back: string;

@@ -33,6 +33,31 @@ function getGenAI(req: Request) {
   });
 }
 
+// Serverless hosts kill the whole invocation at a fixed wall-clock limit (`maxDuration` in
+// vercel.json). When that happens mid-request the platform returns its own HTML error page
+// (FUNCTION_INVOCATION_TIMEOUT / FUNCTION_INVOCATION_FAILED) instead of our JSON, so the client
+// can't tell the user anything useful. These budgets keep every AI call — retries and backoff
+// included — inside that limit so we always get to answer with a real error message.
+const AI_TIME_BUDGET_MS = Number(process.env.AI_TIME_BUDGET_MS) || (process.env.VERCEL ? 50_000 : 240_000);
+const AI_ATTEMPT_TIMEOUT_MS = Number(process.env.AI_ATTEMPT_TIMEOUT_MS) || (process.env.VERCEL ? 45_000 : 120_000);
+const MIN_ATTEMPT_MS = 4_000; // not worth starting an attempt with less time left than this
+
+// Races a promise against a timer. The loser keeps running (we can't cancel an in-flight SDK
+// request), so its eventual rejection is swallowed explicitly — an unhandled rejection takes the
+// whole serverless process down, which is one of the documented causes of FUNCTION_INVOCATION_FAILED.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  promise.catch(() => {});
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const err: any = new Error(`${label} timed out after ${Math.round(ms / 1000)}s`);
+      err.isTimeout = true;
+      reject(err);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!)) as Promise<T>;
+}
+
 // Call Gemini API with automatic exponential backoff retry for transient errors (429 Rate Limits, 503 High Demand, etc.)
 async function generateWithRetry(
   ai: GoogleGenAI,
@@ -43,16 +68,32 @@ async function generateWithRetry(
   let attempt = 0;
   const primaryModel = params.model || "gemini-3.6-flash";
   const fallbackModels = ["gemini-2.5-flash", "gemini-1.5-flash"];
+  const deadline = Date.now() + AI_TIME_BUDGET_MS;
+  const timeLeft = () => deadline - Date.now();
 
   while (attempt < maxRetries) {
     try {
+      if (timeLeft() < MIN_ATTEMPT_MS) {
+        throw new Error(
+          "The AI request ran out of time on the server. Please try again — if you attached large sources, removing some or shortening your request will help."
+        );
+      }
+
       // Use fallback models if primary model is experiencing sustained high demand/503
       const currentModel = attempt >= 2 && fallbackModels.length > 0
         ? fallbackModels[(attempt - 2) % fallbackModels.length]
         : primaryModel;
 
       const currentParams = { ...params, model: currentModel };
-      return await ai.models.generateContent(currentParams);
+      const startedAt = Date.now();
+      const result = await withTimeout(
+        ai.models.generateContent(currentParams),
+        Math.min(AI_ATTEMPT_TIMEOUT_MS, timeLeft()),
+        `Gemini request (${currentModel})`
+      );
+      // Logged so a slow call is visible in the host's runtime logs before it becomes a timeout.
+      console.log(`[Gemini] ${currentModel} responded in ${Date.now() - startedAt}ms (attempt ${attempt + 1})`);
+      return result;
     } catch (err: any) {
       attempt++;
       const errMsg = (err?.message || "").toLowerCase();
@@ -76,8 +117,16 @@ async function generateWithRetry(
         errMsg.includes("spikes in demand") ||
         errMsg.includes("deadline");
 
-      if (isTransientError && attempt < maxRetries) {
-        const delay = baseDelayMs * Math.pow(1.5, attempt - 1) + Math.random() * 1000;
+      // A timeout isn't transient in the retry sense — the model is simply slower than the budget,
+      // and retrying inside the same request would only burn what's left of it.
+      if (err?.isTimeout) {
+        throw new Error(
+          "The AI took too long to respond and the request was cut off. Please try again — if you attached large sources, removing some or shortening your request will help."
+        );
+      }
+
+      const delay = baseDelayMs * Math.pow(1.5, attempt - 1) + Math.random() * 1000;
+      if (isTransientError && attempt < maxRetries && timeLeft() > delay + MIN_ATTEMPT_MS) {
         console.warn(`[Gemini API Transient Error ${errStatus || '503/429'}] Retrying request (attempt ${attempt}/${maxRetries}) in ${Math.round(delay)}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
@@ -564,11 +613,16 @@ app.post("/api/intake/fetch-url", async (req: Request, res: Response) => {
 // already the token-budgeted, retrieval-filtered context, not raw source dumps. Reuses the exact
 // RoadmapTopic shape ({title, description, estimatedMinutes}) so the result plugs directly into
 // the existing RoadmapEditor / GenerationContext flow with no changes there.
+const INTAKE_SOURCES_CHAR_CAP = 60000; // ~15k tokens — comfortably above the client-side word budget
+
 app.post("/api/ai/intake-brief", async (req: Request, res: Response) => {
   try {
     const { prompt, sources, learnerLevel, complexity, depth, language, priorQuestions, priorAnswers } = req.body || {};
     const ai = getGenAI(req);
 
+    // `assembleContext` already budgets this client-side (~4.5k words), but a large PDF intake is
+    // the one call where an oversized prompt can push generation past the host's function time
+    // limit — and a killed function can't return a usable error. Cap defensively here too.
     const sourcesBlock = (sources || [])
       .map((s: any, idx: number) => {
         const chunkText = (s.chunks || [])
@@ -576,7 +630,8 @@ app.post("/api/ai/intake-brief", async (req: Request, res: Response) => {
           .join("\n");
         return `Source ${idx + 1} (${s.sourceType}): "${s.title}"\n${chunkText}`;
       })
-      .join("\n\n");
+      .join("\n\n")
+      .slice(0, INTAKE_SOURCES_CHAR_CAP);
 
     const clarificationBlock =
       Array.isArray(priorQuestions) && Array.isArray(priorAnswers) && priorQuestions.length > 0
@@ -1398,6 +1453,33 @@ Keywords should be realistic phrases a student would actually type, mixing broad
     console.error("Learning keywords generation error:", error);
     res.status(500).json({ success: false, error: error.message || "Failed to generate keywords" });
   }
+});
+
+// ==================== API SAFETY NET ==================== //
+
+// Unmatched /api/* paths must answer with JSON, not fall through to the SPA's index.html —
+// clients call res.json() on these and an HTML body surfaces as a meaningless parse error.
+app.use("/api", (req: Request, res: Response) => {
+  res.status(404).json({ success: false, error: `Unknown API endpoint: ${req.method} ${req.originalUrl}` });
+});
+
+// Last-resort JSON error handler. Also catches errors thrown by middleware rather than routes
+// (e.g. express.json() rejecting an oversized or malformed body), which would otherwise return
+// Express's default HTML error page.
+app.use((err: any, _req: Request, res: Response, _next: any) => {
+  console.error("Unhandled API error:", err);
+  if (res.headersSent) return;
+  const status = err?.status || err?.statusCode || 500;
+  res.status(status).json({
+    success: false,
+    error: err?.type === "entity.too.large" ? "Request body too large." : err?.message || "Internal server error",
+  });
+});
+
+// A stray rejection terminates the process — on Vercel that surfaces as FUNCTION_INVOCATION_FAILED
+// with no usable detail. Log it and keep the process alive so in-flight requests still get answered.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
 });
 
 // Start Express Server with Vite Middleware in Dev Mode

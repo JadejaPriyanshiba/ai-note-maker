@@ -1,4 +1,5 @@
 import { getAISettings, incrementAIRequestCount } from "./storage";
+import { readAIResponse } from "./aiService";
 import { LearningContent, LearningNode, LearningSessionFilter } from "../types";
 import { providerRegistry } from "./providers/ContentProvider";
 import "./providers/YouTubeProvider"; // registers the YouTube provider (side effect)
@@ -114,10 +115,7 @@ export async function generateLearningTree(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to generate learning tree");
-  }
+  const data = await readAIResponse(res, "Failed to generate learning tree");
   return { topic: data.topic, nodes: flattenTree(data.nodes) };
 }
 
@@ -132,10 +130,7 @@ export async function regenerateNodeKeywords(params: {
     headers: getHeaders(),
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to regenerate keywords");
-  }
+  const data = await readAIResponse(res, "Failed to regenerate keywords");
   return data.keywords as string[];
 }
 
